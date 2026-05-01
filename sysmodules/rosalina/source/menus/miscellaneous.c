@@ -313,8 +313,11 @@ void MiscellaneousMenu_ReturnToHomeMenu(void)
     do
     {
         Draw_Lock();
+        Draw_DrawMenuFrame("Miscellaneous options menu");
+
         Draw_DrawString(10, 10, COLOR_TITLE, "Return to HOME Menu");
         Draw_DrawString(10, 30, COLOR_WHITE, "Press A to confirm.\nPress B to go back.");
+        
         Draw_FlushFramebuffer();
         Draw_Unlock();
 
