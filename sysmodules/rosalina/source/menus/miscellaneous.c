@@ -70,7 +70,7 @@ Menu miscellaneousMenu = {
         { "Switch the hb. title to the current app.", METHOD, .method = &MiscellaneousMenu_SwitchBoot3dsxTargetTitle },
         { "Change the menu combo", METHOD, .method = &MiscellaneousMenu_ChangeMenuCombo },
         { "Start InputRedirection", METHOD, .method = &MiscellaneousMenu_InputRedirection },
-        { "Virtual Home Button", METHOD, .method = &RosalinaMenu_VirtualHomeButton },
+        { "Return To HOME Menu", METHOD, .method = &RosalinaMenu_ReturnToHomeMenu },
         { "Update time and date via NTP", METHOD, .method = &MiscellaneousMenu_UpdateTimeDateNtp },
         { "Nullify user time offset", METHOD, .method = &MiscellaneousMenu_NullifyUserTimeOffset },
         { "Dump DSP firmware", METHOD, .method = &MiscellaneousMenu_DumpDspFirm },
@@ -288,7 +288,7 @@ void MiscellaneousMenu_InputRedirection(void)
                         posY,
                         COLOR_WHITE,
                         "This might cause a key press to be repeated in\n"
-                        "Home Menu for no reason.\n\n"
+                        "HOME Menu for no reason.\n\n"
                         "Just pressing ZL/ZR on the console is enough to fix\nthis.\n"
                     );
                 }
@@ -303,7 +303,7 @@ void MiscellaneousMenu_InputRedirection(void)
     while(!(waitInput() & KEY_B) && !menuShouldExit);
 }
 
-void RosalinaMenu_VirtualHomeButton(void)
+void MiscellaneousMenu_ReturnToHomeMenu(void)
 {
     Draw_Lock();
     Draw_ClearFramebuffer();
@@ -313,25 +313,23 @@ void RosalinaMenu_VirtualHomeButton(void)
     do
     {
         Draw_Lock();
-        Draw_DrawMenuFrame("Miscellaneous options menu");
-        Draw_DrawString(10, 30, COLOR_WHITE, "Exit Rosalina to get back to the Home Menu.");
-        Draw_DrawString(10, 50, COLOR_WHITE, "Press A to proceed.");
-        Draw_DrawString(10, 60, COLOR_WHITE, "Press B to go back.");
+        Draw_DrawString(10, 10, COLOR_TITLE, "Return to HOME Menu");
+        Draw_DrawString(10, 30, COLOR_WHITE, "Press A to confirm.\nPress B to go back.");
         Draw_FlushFramebuffer();
         Draw_Unlock();
 
         u32 pressed = waitInputWithTimeout(1000);
 
-        if (pressed & KEY_A)
+        if(pressed & KEY_A)
         {
-            // Simulate HOME button press
             srvPublishToSubscriber(0x204, 0);
+            menuRequestClose();
             return;
         }
-        else if (pressed & KEY_B)
+        else if(pressed & KEY_B)
             return;
     }
-    while (!menuShouldExit);
+    while(!menuShouldExit);
 }
 
 void MiscellaneousMenu_UpdateTimeDateNtp(void)
@@ -517,7 +515,7 @@ void MiscellaneousMenu_DumpDspFirm(void)
         else
             Draw_DrawFormattedString(
                 10, 30, COLOR_WHITE,
-                "Operation failed (0x%08lx).\n\nMake sure that Home Menu is running and that your\nSD card is inserted.",
+                "Operation failed (0x%08lx).\n\nMake sure that HOME Menu is running and that your\nSD card is inserted.",
                 res
             );
         Draw_FlushFramebuffer();
