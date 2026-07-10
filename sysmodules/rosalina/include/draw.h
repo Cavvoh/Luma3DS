@@ -90,7 +90,7 @@
 #define DRAW_MAX_FORMATTED_STRING_SIZE  512
 
 #define MAX_TRACKED_LINES 64
-#define CHAR_W 8             // 8px pro Zeichen (wie in deinem scroll-code)
+#define CHAR_W 8             // 8px per character
 #define TEXT_BASE_X 35
 #define RIGHT_ARROW_X 250
 #define ARROW_LEN_CHARS 2
@@ -105,7 +105,7 @@ u32 Draw_DrawString(u32 posX, u32 posY, u32 color, const char *string);
 
 void ClearScreenQuickly(void);
 void Draw_DrawMenuFrame(const char *title);
-void Draw_DrawMenuCursor(u32 yPos, bool selected, const char *text);
+void Draw_DrawMenuCursor(u32 yPos, bool selected, const char *text, const char *checkbox);
 
 __attribute__((format(printf,4,5)))
 u32 Draw_DrawFormattedString(u32 posX, u32 posY, u32 color, const char *fmt, ...);

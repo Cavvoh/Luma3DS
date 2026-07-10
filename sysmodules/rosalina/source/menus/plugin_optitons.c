@@ -8,74 +8,17 @@
 #include <stdio.h>
 #include <string.h>
 
-extern bool PluginChecker_isEnabled;
 extern bool PluginWatcher_isEnabled;
 extern bool PluginWatcher_isRunning;
 extern bool PluginConverter_UseCache;
 extern u32 PluginWatcher_WatchLevel;
 
-static int scrollOffset = 0;
-static u32 lastSelectedHash = 0;
-static int scrollDir = 1;
-static int scrollWait = 0;
-static const int scrollSpeed = 2;
-static const int scrollWaitFrames = 40;
-static const int scrollInitialWaitFrames = 15;
-
-static void PluginOptions_DrawScrollableText(u32 xPos, u32 yPos, const char *text, bool selected)
-{
-    if (!selected) {
-        Draw_DrawString(xPos, yPos, COLOR_WHITE, text);
-        return;
-    }
-
-    u32 currentHash = yPos ^ ((u32)text);
-
-    if (lastSelectedHash != currentHash) {
-        scrollOffset = 0;
-        lastSelectedHash = currentHash;
-        scrollDir = 1;
-        scrollWait = scrollInitialWaitFrames;
-    }
-
-    int textLen = strlen(text);
-    int maxTextChars = 32;
-
-    if (textLen > maxTextChars) {
-        int maxOffset = (textLen - maxTextChars) * 8;
-
-        if (scrollWait > 0) {
-            scrollWait--;
-        } else {
-            scrollOffset += scrollSpeed * scrollDir;
-            if (scrollDir == 1 && scrollOffset >= maxOffset) {
-                scrollOffset = maxOffset;
-                scrollWait = scrollWaitFrames;
-                scrollDir = -1;
-            } else if (scrollDir == -1 && scrollOffset <= 0) {
-                scrollOffset = 0;
-                scrollWait = scrollWaitFrames;
-                scrollDir = 1;
-            }
-        }
-
-        char buf[33];
-        int startChar = scrollOffset / 8;
-        strncpy(buf, text + startChar, maxTextChars);
-        buf[maxTextChars] = '\0';
-        Draw_DrawString(xPos, yPos, COLOR_CYAN, buf);
-    } else {
-        Draw_DrawString(xPos, yPos, COLOR_CYAN, text);
-    }
-}
-
 Menu pluginOptionsMenu = {
     "Plugin settings menu",
     {
         { "", METHOD, .method = &PluginLoaderOptions__MenuCallback },
-        { "", METHOD, .method = &PluginChecker__MenuCallback },
         { "", METHOD, .method = &PluginWatcher__MenuCallback },
-        { "Set watch level", METHOD, .method = &PluginWatcher_SetWatchLevel },
+        { "Set watch level...", METHOD, .method = &PluginWatcher_SetWatchLevel },
         { "", METHOD, .method = &PluginConverter__ToggleUseCacheFlag },
         {},
     }
@@ -98,24 +41,6 @@ void PluginLoaderOptions__UpdateMenu(void)
     };
 
     rosalinaMenu.items[3].menu->items[0].title = status[PluginLoaderCtx.isEnabled];
-}
-
-void PluginChecker__MenuCallback(void)
-{
-    PluginChecker_isEnabled = !PluginChecker_isEnabled;
-    LumaConfig_RequestSaveSettings();
-    PluginChecker__UpdateMenu();
-}
-
-void PluginChecker__UpdateMenu(void)
-{
-    static const char *status[2] =
-    {
-        "Plugin Checker: [Disabled]",
-        "Plugin Checker: [Enabled]"
-    };
-
-    rosalinaMenu.items[3].menu->items[1].title = status[PluginChecker_isEnabled];
 }
 
 void PluginWatcher__MenuCallback(void)
@@ -142,7 +67,7 @@ void PluginWatcher__UpdateMenu(void)
         "Plugin Watcher: [Disabled]",
         "Plugin Watcher: [Enabled]"
     };
-    rosalinaMenu.items[3].menu->items[2].title = status[PluginWatcher_isEnabled];
+    rosalinaMenu.items[3].menu->items[1].title = status[PluginWatcher_isEnabled];
 }
 
 void PluginConverter__ToggleUseCacheFlag(void)
@@ -159,7 +84,7 @@ void PluginConverter__UpdateMenu(void)
         "Use cache in plugin converter: [OFF]",
         "Use cache in plugin converter: [ON]"
     };
-    rosalinaMenu.items[3].menu->items[4].title = status[PluginConverter_UseCache];
+    rosalinaMenu.items[3].menu->items[3].title = status[PluginConverter_UseCache];
 }
 
 void PluginWatcher_SetWatchLevel(void)
@@ -185,17 +110,7 @@ void PluginWatcher_SetWatchLevel(void)
             u32 yPos = 40 + i * SPACING_Y;
             const char *checkbox = (*watchLv & (1 << i)) ? "(x)" : "( )";
 
-            if (i == selected) {
-                Draw_DrawString(15, yPos, COLOR_LIGHT_BLUE, "->");
-                Draw_DrawString(250, yPos, COLOR_LIGHT_BLUE, "<-        ");
-                Draw_DrawString(35, yPos, COLOR_CYAN, checkbox);
-                PluginOptions_DrawScrollableText(59, yPos, watchOptions[i], true);
-            } else {
-                Draw_DrawString(15, yPos, COLOR_GRAY, " ~");
-                Draw_DrawString(250, yPos, COLOR_WHITE, "  ");
-                Draw_DrawString(35, yPos, COLOR_WHITE, checkbox);
-                Draw_DrawString(59, yPos, COLOR_WHITE, watchOptions[i]);
-            }
+            Draw_DrawMenuCursor(yPos, i == selected, watchOptions[i], checkbox);
         }
 
         Draw_FlushFramebuffer();

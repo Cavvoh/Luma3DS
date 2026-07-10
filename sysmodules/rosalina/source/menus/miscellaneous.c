@@ -70,7 +70,6 @@ Menu miscellaneousMenu = {
         { "Switch the hb. title to the current app.", METHOD, .method = &MiscellaneousMenu_SwitchBoot3dsxTargetTitle },
         { "Change the menu combo", METHOD, .method = &MiscellaneousMenu_ChangeMenuCombo },
         { "Start InputRedirection", METHOD, .method = &MiscellaneousMenu_InputRedirection },
-        { "Return To HOME Menu", METHOD, .method = &MiscellaneousMenu_ReturnToHomeMenu },
         { "Update time and date via NTP", METHOD, .method = &MiscellaneousMenu_UpdateTimeDateNtp },
         { "Nullify user time offset", METHOD, .method = &MiscellaneousMenu_NullifyUserTimeOffset },
         { "Dump DSP firmware", METHOD, .method = &MiscellaneousMenu_DumpDspFirm },
@@ -180,9 +179,8 @@ void MiscellaneousMenu_ChangeMenuCombo(void)
 
         posY = Draw_DrawFormattedString(10, 30, COLOR_WHITE, "The current menu combo is:  %s", comboStrOrig);
         posY = Draw_DrawFormattedString(10, posY + SPACING_Y, COLOR_WHITE, "Please enter the new combo: %s", comboStr) + SPACING_Y;
-
-        posY = Draw_DrawString(10, posY + SPACING_Y, COLOR_WHITE, "Successfully changed the menu combo.");
-
+        posY = Draw_DrawString(10, posY + SPACING_Y, COLOR_GREEN, "Successfully changed the menu combo.");
+        Draw_DrawString(20, posY + SPACING_Y * 2, COLOR_GRAY, "Press B to go back.");
         Draw_FlushFramebuffer();
         Draw_Unlock();
     }
@@ -234,26 +232,21 @@ void MiscellaneousMenu_InputRedirection(void)
         Draw_Lock();
         Draw_DrawMenuFrame("Miscellaneous options menu");
 
-        if(!wasEnabled && cantStart)
-            Draw_DrawString(10, 30, COLOR_WHITE, "Can't start the input redirection before the system\nhas finished loading.");
-        else if(!wasEnabled)
-        {
-            Draw_DrawString(10, 30, COLOR_WHITE, "Starting InputRedirection...");
-            if(!done)
-            {
+        u32 posY = 30;
+        if (!wasEnabled && cantStart)
+            Draw_DrawString(10, posY, COLOR_WHITE, "Can't start the input redirection before the system has finished loading.");
+        else if (!wasEnabled) {
+            Draw_DrawString(10, posY, COLOR_WHITE, "Starting InputRedirection...");
+            if (!done) {
                 res = InputRedirection_DoOrUndoPatches();
-                if(R_SUCCEEDED(res))
-                {
+                if (R_SUCCEEDED(res)) {
                     res = svcCreateEvent(&inputRedirectionThreadStartedEvent, RESET_STICKY);
-                    if(R_SUCCEEDED(res))
-                    {
+                    if (R_SUCCEEDED(res)) {
                         inputRedirectionCreateThread();
                         res = svcWaitSynchronization(inputRedirectionThreadStartedEvent, 10 * 1000 * 1000 * 1000LL);
-                        if(res == 0)
+                        if (res == 0)
                             res = (Result)inputRedirectionStartResult;
-
-                        if(res != 0)
-                        {
+                        if (res != 0) {
                             svcCloseHandle(inputRedirectionThreadStartedEvent);
                             InputRedirection_DoOrUndoPatches();
                             inputRedirectionEnabled = false;
@@ -261,77 +254,31 @@ void MiscellaneousMenu_InputRedirection(void)
                         inputRedirectionStartResult = 0;
                     }
                 }
-
-                if(res != 0)
+                if (res != 0)
                     sprintf(buf, "Starting InputRedirection... failed (0x%08lx).", (u32)res);
                 else
-                    miscellaneousMenu.items[2].title = "Stop InputRedirection";
-
+                    miscellaneousMenu.items[3].title = "Stop InputRedirection";
                 done = true;
             }
-
-            if(res == 0)
-                Draw_DrawString(10, 30, COLOR_WHITE, "Starting InputRedirection... OK.");
+            if (res == 0)
+                posY = Draw_DrawString(10, posY + SPACING_Y, COLOR_GREEN, "Starting InputRedirection... OK.");
             else
-                Draw_DrawString(10, 30, COLOR_WHITE, buf);
-        }
-        else
-        {
-            if(res == 0)
-            {
-                u32 posY = 30;
-                posY = Draw_DrawString(10, posY, COLOR_WHITE, "InputRedirection stopped successfully.\n\n");
-                if (isN3DS)
-                {
-                    posY = Draw_DrawString(
-                        10,
-                        posY,
-                        COLOR_WHITE,
-                        "This might cause a key press to be repeated in\n"
-                        "HOME Menu for no reason.\n\n"
-                        "Just pressing ZL/ZR on the console is enough to fix\nthis.\n"
-                    );
+                posY = Draw_DrawString(10, posY + SPACING_Y, COLOR_RED, buf);
+        } else {
+            if (res == 0) {
+                posY = Draw_DrawString(10, posY, COLOR_GREEN, "InputRedirection stopped successfully.\n\n");
+                if (isN3DS) {
+                    posY = Draw_DrawString(10, posY, COLOR_WHITE,
+                        "This might cause a key press to be repeated\nin Home Menu for no reason.\n\nJust pressing ZL/ZR on the console is\nenough to fix this.\n");
                 }
+            } else {
+                posY = Draw_DrawString(10, posY, COLOR_RED, buf);
             }
-            else
-                Draw_DrawString(10, 30, COLOR_WHITE, buf);
         }
-
+        Draw_DrawString(10, posY + SPACING_Y * 2, COLOR_GRAY, "Press B to go back.");
         Draw_FlushFramebuffer();
         Draw_Unlock();
-    }
-    while(!(waitInput() & KEY_B) && !menuShouldExit);
-}
-
-void MiscellaneousMenu_ReturnToHomeMenu(void)
-{
-    Draw_Lock();
-    Draw_ClearFramebuffer();
-    Draw_FlushFramebuffer();
-    Draw_Unlock();
-
-    do
-    {
-        Draw_Lock();
-        Draw_DrawMenuFrame("Miscellaneous options menu");
-
-        Draw_DrawString(10, 30, COLOR_WHITE, "Press A to confirm.\nPress B to go back.");
-        
-        Draw_FlushFramebuffer();
-        Draw_Unlock();
-
-        u32 pressed = waitInputWithTimeout(1000);
-
-        if(pressed & KEY_A)
-        {
-            srvPublishToSubscriber(0x204, 0);
-            menuRequestClose();
-            return;
-        }
-        else if(pressed & KEY_B)
-            return;
-    }
-    while(!menuShouldExit);
+    } while(!(waitInput() & KEY_B) && !menuShouldExit);
 }
 
 void MiscellaneousMenu_UpdateTimeDateNtp(void)
@@ -368,6 +315,7 @@ void MiscellaneousMenu_UpdateTimeDateNtp(void)
         absOffset = absOffset < 0 ? -absOffset : absOffset;
         posY = Draw_DrawFormattedString(10, 30, COLOR_WHITE, "Current UTC offset:  %c%02d%02d", utcOffset < 12 ? '-' : '+', absOffset, utcOffsetMinute);
         posY = Draw_DrawFormattedString(10, posY + SPACING_Y, COLOR_WHITE, "Use DPAD Left/Right to change hour offset.\nUse DPAD Up/Down to change minute offset.\nPress A when done.") + SPACING_Y;
+        Draw_DrawString(10, posY + SPACING_Y * 3, COLOR_GRAY, "Press B to go back.");
 
         Draw_FlushFramebuffer();
         Draw_Unlock();
@@ -406,18 +354,16 @@ void MiscellaneousMenu_UpdateTimeDateNtp(void)
 
         absOffset = utcOffset;
         absOffset = absOffset < 0 ? -absOffset : absOffset;
-        Draw_DrawFormattedString(10, 30, COLOR_WHITE, "Current UTC offset:  %c%02d", utcOffset < 0 ? '-' : '+', absOffset);
+        posY = Draw_DrawFormattedString(10, 30, COLOR_WHITE, "Current UTC offset:  %c%02d%02d", utcOffset < 0 ? '-' : '+', absOffset, utcOffsetMinute);
         if (cantStart)
-            Draw_DrawFormattedString(10, posY + 2 * SPACING_Y, COLOR_WHITE, "Can't sync time/date before the system\nhas finished loading.") + SPACING_Y;
+            posY = Draw_DrawString(10, posY + SPACING_Y * 5, COLOR_RED, "Can't sync time/date before the system has finished loading.");
         else if (R_FAILED(res))
-            Draw_DrawFormattedString(10, posY + 2 * SPACING_Y, COLOR_WHITE, "Operation failed (%08lx).", (u32)res) + SPACING_Y;
+            posY = Draw_DrawFormattedString(10, posY + SPACING_Y * 5, COLOR_RED, "Operation failed (%08lx).", (u32)res);
         else
-            Draw_DrawFormattedString(10, posY + 2 * SPACING_Y, COLOR_WHITE, "Time/date updated successfully.") + SPACING_Y;
-
+            posY = Draw_DrawString(10, posY + SPACING_Y * 5, COLOR_GREEN, "Time/date updated successfully.");;
         Draw_FlushFramebuffer();
         Draw_Unlock();
-    }
-    while(!(waitInput() & KEY_B) && !menuShouldExit);
+    } while(!(waitInput() & KEY_B) && !menuShouldExit);
 }
 
 void MiscellaneousMenu_NullifyUserTimeOffset(void)
@@ -433,14 +379,14 @@ void MiscellaneousMenu_NullifyUserTimeOffset(void)
     {
         Draw_Lock();
         Draw_DrawMenuFrame("Miscellaneous options menu");
-        if(R_SUCCEEDED(res))
-            Draw_DrawString(10, 30, COLOR_WHITE, "Operation succeeded.\n\nPlease reboot to finalize the changes.");
+        if (R_SUCCEEDED(res))
+            Draw_DrawString(10, 30, COLOR_GREEN, "Operation succeeded.\n\nPlease reboot to finalize the changes.");
         else
-            Draw_DrawFormattedString(10, 30, COLOR_WHITE, "Operation failed (0x%08lx).", res);
+            Draw_DrawFormattedString(10, 30, COLOR_RED, "Operation failed (0x%08lx).", res);
+        Draw_DrawString(10, 60, COLOR_GRAY, "Press B to go back.");
         Draw_FlushFramebuffer();
         Draw_Unlock();
-    }
-    while(!(waitInput() & KEY_B) && !menuShouldExit);
+    } while(!(waitInput() & KEY_B) && !menuShouldExit);
 }
 
 static Result MiscellaneousMenu_DumpDspFirmCallback(Handle procHandle, u32 textSz, u32 roSz, u32 rwSz)
@@ -512,16 +458,14 @@ void MiscellaneousMenu_DumpDspFirm(void)
     {
         Draw_Lock();
         Draw_DrawMenuFrame("Miscellaneous options menu");
-        if(R_SUCCEEDED(res))
-            Draw_DrawString(10, 30, COLOR_WHITE, "DSP firm. successfully written to /3ds/dspfirm.cdc\non the SD card.");
+        if (R_SUCCEEDED(res))
+            Draw_DrawString(10, 30, COLOR_GREEN, "DSP firm. successfully written to\n/3ds/dspfirm.cdc on the SD card.");
         else
-            Draw_DrawFormattedString(
-                10, 30, COLOR_WHITE,
-                "Operation failed (0x%08lx).\n\nMake sure that HOME Menu is running and that your\nSD card is inserted.",
-                res
-            );
+            Draw_DrawFormattedString(10, 30, COLOR_RED,
+                "Operation failed (0x%08lx).\n\nMake sure that Home Menu is running and that\nyour SD card is inserted.",
+                res);
+        Draw_DrawString(10, 80, COLOR_GRAY, "Press B to go back.");
         Draw_FlushFramebuffer();
         Draw_Unlock();
-    }
-    while(!(waitInput() & KEY_B) && !menuShouldExit);
+    } while(!(waitInput() & KEY_B) && !menuShouldExit);
 }

@@ -156,6 +156,11 @@ u32 installK11Extension(u8 *pos, u32 size, bool needToInitSd, u32 baseK11VA, u32
             u64 autobootTwlTitleId;
             u8 autobootCtrAppmemtype;
 
+            u32 extraConfigFlags;
+            u32 homeButtonSimFlags;
+            u32 homeButtonCombo;
+            u8 screenToggleTarget;
+            u32 screenToggleCombo;
             u16 launchedPath[80+1];
         } info;
     };
@@ -238,6 +243,11 @@ u32 installK11Extension(u8 *pos, u32 size, bool needToInitSd, u32 baseK11VA, u32
     info->bottomScreenFilter = configData.bottomScreenFilter;
     info->autobootTwlTitleId = configData.autobootTwlTitleId;
     info->autobootCtrAppmemtype = configData.autobootCtrAppmemtype;
+    info->extraConfigFlags = configData.extraConfigFlags;
+    info->homeButtonSimFlags = configData.homeButtonSimFlags;
+    info->homeButtonCombo = configData.homeButtonCombo;
+    info->screenToggleTarget = configData.screenToggleTarget;
+    info->screenToggleCombo = configData.screenToggleCombo;
     info->versionMajor = LUMA_VERSION_MAJOR;
     info->versionMinor = LUMA_VERSION_MINOR;
     info->versionBuild = LUMA_VERSION_BUILD;
@@ -620,6 +630,26 @@ u32 patchP9AccessChecks(u8 *pos, u32 size)
     return 0;
 }
 
+u32 patchKernel9Fs(u8 *pos, u32 size)
+{
+    static const u8 pattern[] = {  0x00, 0xF0, 0x82, 0xFA, 0x00, 0x28, 0xAC, 0xD0, };
+    u16* off = (u16 *)memsearch(pos, pattern, size, sizeof(pattern));
+
+    if(off)
+    {
+        off[0] = 0x3038;//adds r0, r0, 0x38
+        off[1] = 0x6801;//ldr r1, [r0]
+        off[2] = 0x6701;//str r1, [r0, #0x70]
+        off[3] = 0x0000;//movs r0, r0 (aka "nop")
+    }
+
+    //Allow booting without this patch for now.
+    // if(!off)
+    //     return 1;
+
+    return 0;
+}
+
 u32 patchUnitInfoValueSet(u8 *pos, u32 size)
 {
     //Look for UNITINFO value being set during kernel sync
@@ -797,7 +827,7 @@ void patchTwlBg(u8 *pos, u32 size)
     };
 
     // "error" func doesn't seem to work here
-    if (CONFIG(ENABLEDSIEXTFILTER))
+    if (CONFIG(LOADEXTFIRMSANDMODULES))
     {
         u16 filter[5*6] = { 0 };
         u32 rd = fileRead(filter, "twl_upscaling_filter.bin", sizeof(filter));
@@ -880,7 +910,7 @@ u32 patchProtoNandSignatureCheck(u8 *pos, u32 size) {
         off[0x20] = 2;
     }
 
-    else if (firmProtoVersion == 238 || firmProtoVersion == 236) { // SDK 0.10.0 (early 0.10.0) and SDK 0.10.2
+    else if (firmProtoVersion == 238) { // SDK 0.10
         // Same patch as for v243 ported to the different ncsd_read() function
         static const u8 pattern[] = {
             0x00, 0x11, 0x9f, 0xe5,
@@ -893,107 +923,8 @@ u32 patchProtoNandSignatureCheck(u8 *pos, u32 size) {
 
         off[0x20] = 2;
     }
-    
-    else if (firmProtoVersion == 1200) { // SDK 0.12
-        // Same patch as for v238 and v243 ported to the different ncsd_read() function
-        static const u8 pattern[] = {
-            0x4C, 0x10, 0x9F, 0xE5,
-            0x4C, 0x50, 0x9F, 0xE5,
-        };
-    
-        u8 *off = memsearch(pos, pattern, size, sizeof(pattern));
-        if (!off)
-            return 1;
-    
-        off[0x20] = 2;
-                    
-        static const u8 pattern_sigcheck[] = {
-            0x33, 0x10, 0xa0, 0xe3, // mov r1, #0x33
-        };
-        u32* off2 = (u32*)memsearch(pos, pattern_sigcheck, size, sizeof(pattern_sigcheck));
-        if (!off2) return 1;
-        for (; off2 < (u32*)&pos[size] && off2[0] != 0xD8E003FF; off2++) {}
-        if (off2 >= (u32*)&pos[size]) return 1;
-        off2[0] = 0; // patch failing result to success.
-
-    }
 
     else return 1;
 
-    return 0;
-}
-
-static u32 patchSingleInstruction(u8 *pos, u32 size, void *pattern, u32 patternSize, s32 offset, u32 newInsn, u8 **out_pos) {
-    u32 *off = (u32 *)memsearch(pos, pattern, size, patternSize);
-    if (!off) return 1;
-    *out_pos = (u8 *)off;
-    off += offset;
-    *off = newInsn;
-    return 0;
-}
-
-u32 patchProtoUnitinfo1200(u8 *pos, u32 size, u8 *arm9Section, u32 arm9SectionSize) {
-    u8 *tmp_pos = NULL;
-    u8 pattern0[] = { 0x64, 0x10, 0x9F, 0xE5,   /* LDR R1, #0x10010000 */
-                      0x10, 0x30, 0xD1, 0xE5 }; /* LDRB R3, [R1, #0x10] */
-    if (patchSingleInstruction(pos, size, pattern0, sizeof(pattern0), +1, 0xE3A03001, &tmp_pos)) /* mov r3, #1 */
-        return 1;
-    
-    u8 pattern1[] = { 0x10, 0x00, 0x9F, 0xE5,   /* LDR R0, #0x10010000 */
-                      0x10, 0x00, 0xD0, 0xE5 }; /* LRDB R0, [R0, #0x10] */
-    if (patchSingleInstruction(pos, size, pattern1, sizeof(pattern1), +1, 0xE3A00001, &tmp_pos)) /* mov r0, #1 */
-        return 1;
-    tmp_pos += 8;
-    /* there are two of these */
-    if (patchSingleInstruction(tmp_pos, size, pattern1, sizeof(pattern1), +1, 0xE3A00001, &tmp_pos)) /* mov r0, #1 */
-        return 1;
-    
-    u8 pattern2[] = { 0xB8, 0x00, 0x9F, 0xE5,   /* LDR R0, #0x10010000 */
-                      0x10, 0x00, 0xD0, 0xE5 }; /* LDRB R0, [R0, #0x10] */
-    if (patchSingleInstruction(pos, size, pattern2, sizeof(pattern2), +1, 0xE3A00001, &tmp_pos)) /* mov r0, #1 */
-        return 1;
-    
-    u8 pattern3[] = { 0x03, 0x50, 0x04, 0xE2,   /* AND R5, R4, #3 */
-                      0x10, 0x10, 0xD0, 0xE5 }; /* LDRB R1, [R0, #0x10] */
-    if (patchSingleInstruction(pos, size, pattern3, sizeof(pattern3), +1, 0xE3A01001, &tmp_pos)) /* mov r1, #1 */
-        return 1;
-    
-    u8 pattern4[] = { 0x97, 0x00, 0x00, 0x1A,   /* BNE #0x8050D8C */
-                      0x10, 0x00, 0xD0, 0xE5 }; /* LDRB R0, [R0, #0x10] */
-    if (patchSingleInstruction(pos, size, pattern4, sizeof(pattern4), +1, 0xE3A00001, &tmp_pos)) /* mov r0, #1 */
-        return 1;
-    
-    u8 pattern5[] = { 0x20, 0x01, 0x9F, 0x15,   /* LDRNE R0, #0x10010000 */
-                      0x10, 0x00, 0xD0, 0x15 }; /* LDRBNE R0, [R0, #0x10] */
-    if (patchSingleInstruction(pos, size, pattern5, sizeof(pattern5), +1, 0xE3A00001, &tmp_pos)) /* mov r0, #1 */
-        return 1;
-    
-    u8 pattern6[] = { 0x10, 0x40, 0x2D, 0xE9,   /* PUSH {R4, LR} */
-                      0x10, 0x00, 0xD1, 0xE5 }; /* LDRB R0, [R1, #0x10] */
-    if (patchSingleInstruction(pos, size, pattern6, sizeof(pattern6), +1, 0xE3A00001, &tmp_pos)) /* mov r0, #1 */
-        return 1;
-    
-    u8 pattern7[] = { 0x24, 0xD0, 0x4D, 0xE2,   /* SUB SP, SP, #0x24 */
-                      0x10, 0x00, 0xD0, 0xE5 }; /* LDRB R0, [R0, #0x10] */
-    if (patchSingleInstruction(pos, size, pattern7, sizeof(pattern7), +1, 0xE3A00001, &tmp_pos)) /* mov r0, #1 */
-        return 1;
-    
-    u8 pattern8[] = { 0x01, 0x00, 0x50, 0xE1,   /* CMP R0, R1 */
-                      0xB8, 0xA4, 0xFF, 0x1B }; /* BLNE svcBreak */
-    if (patchSingleInstruction(pos, size, pattern8, sizeof(pattern8), +1, 0xE320F000, &tmp_pos)) /* mov r0, #1 */
-        return 1;
-    
-    /* k9 sync function, sends unitinfo to k11(?) */
-    u8 syncpattern[] = {
-        0x09, 0x00, 0x00, 0x1A, /* BNE 0x808E7A0 */
-        0x10, 0x30, 0xDC, 0xE5, /* LDRB R3, [R12, #0x10] */
-        0x01, 0x00, 0x53, 0xE3  /* CMP R3, #1 */
-    };
-                                        
-    u8 *syncaddr = memsearch(arm9Section, syncpattern, arm9SectionSize, sizeof(syncpattern));
-    if (!syncaddr) return 1;
-    syncaddr += 4;
-    *(u32 *)syncaddr = 0xE3A03001; /* MOV R3, #1 */
-    
     return 0;
 }

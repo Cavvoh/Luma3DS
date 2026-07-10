@@ -33,7 +33,6 @@
 
 #define HID_PAD           (REG32(0x10146000) ^ 0xFFF)
 
-#define BUTTON_ANY              0x00000FFF
 #define DEFAULT_MENU_COMBO      (KEY_L | KEY_DDOWN | KEY_SELECT)
 #define DIRECTIONAL_KEYS        (KEY_DOWN | KEY_UP | KEY_LEFT | KEY_RIGHT)
 
@@ -67,6 +66,7 @@ typedef struct Menu {
 } Menu;
 
 extern u32 menuCombo;
+extern bool instantReboot;
 extern bool isHidInitialized;
 extern bool isQtmInitialized;
 extern u32 mcuFwVersion;
@@ -90,12 +90,14 @@ u32 waitComboWithTimeout(s32 msec);
 u32 waitCombo(void);
 
 bool menuCheckN3ds(void);
+bool menuCheckNoO2ds(void);
 u32 menuCountItems(const Menu *menu);
+
+u32 Get_TitleID(u64* titleId);
 
 MyThread *menuCreateThread(void);
 void    menuEnter(void);
 void    menuLeave(void);
-void    menuRequestClose(void);
 void    menuThreadMain(void);
 void    menuShow(Menu *root);
 void    DispMessage(const char *title, const char *message);

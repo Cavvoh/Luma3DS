@@ -33,12 +33,15 @@
 #include "ifile.h"
 #include "menus/miscellaneous.h"
 #include "menus/sysconfig.h"
+#include "menus/config_extra.h"
+#include "menus/home_button_sim.h"
+#include "menus/screen_toggle.h"
 #include "plugin/plgloader.h"
 
-extern bool PluginChecker_isEnabled;
 extern bool PluginWatcher_isEnabled;
 extern bool PluginConverter_UseCache;
 extern u32  PluginWatcher_WatchLevel;
+extern config_extra configExtra;
 
 typedef struct CfgData {
     u16 formatVersionMajor, formatVersionMinor;
@@ -58,6 +61,12 @@ typedef struct CfgData {
 
     u64 autobootTwlTitleId;
     u8 autobootCtrAppmemtype;
+
+    u32 extraConfigFlags;
+    u32 homeButtonSimFlags;
+    u32 homeButtonCombo;
+    u8 screenToggleTarget;
+    u32 screenToggleCombo;
 } CfgData;
 
 bool saveSettingsRequest = false;
@@ -96,6 +105,8 @@ static size_t LumaConfig_SaveLumaIniConfigToStr(char *out, const CfgData *cfg)
     char lumaVerStr[64];
     char lumaRevSuffixStr[16];
     char rosalinaMenuComboStr[128];
+    char homeButtonComboStr[128];
+    char screenToggleComboStr[128];
 
     const char *splashPosStr;
     const char *splashDurationPresetStr;
@@ -158,6 +169,8 @@ static size_t LumaConfig_SaveLumaIniConfigToStr(char *out, const CfgData *cfg)
     }
 
     LumaConfig_ConvertComboToString(rosalinaMenuComboStr, cfg->rosalinaMenuCombo);
+    LumaConfig_ConvertComboToString(homeButtonComboStr, cfg->homeButtonCombo);
+    LumaConfig_ConvertComboToString(screenToggleComboStr, cfg->screenToggleCombo);
 
     static const int pinOptionToDigits[] = { 0, 4, 6, 8 };
     int pinNumDigits = pinOptionToDigits[MULTICONFIG(PIN)];
@@ -184,6 +197,9 @@ static size_t LumaConfig_SaveLumaIniConfigToStr(char *out, const CfgData *cfg)
         (int)CONFIG(AUTOBOOTEMU), (int)CONFIG(LOADEXTFIRMSANDMODULES),
         (int)CONFIG(PATCHGAMES), (int)CONFIG(REDIRECTAPPTHREADS),
         (int)CONFIG(PATCHVERSTRING), (int)CONFIG(SHOWGBABOOT),
+        (int)CONFIG(PATCHUNITINFO), (int)CONFIG(DISABLEARM11EXCHANDLERS),
+        (int)CONFIG(ENABLESAFEFIRMROSALINA), (int)CONFIG(INSTANTREBOOTNOERRDISP),
+        (int)CONFIG(ENABLESDBOOTTIMEPATCH),
 
         1 + (int)MULTICONFIG(DEFAULTEMU), 4 - (int)MULTICONFIG(BRIGHTNESS),
         splashPosStr, splashDurationPresetStr, (unsigned int)cfg->splashDurationMsec,
@@ -191,10 +207,17 @@ static size_t LumaConfig_SaveLumaIniConfigToStr(char *out, const CfgData *cfg)
         autobootModeStr,
 
         cfg->hbldr3dsxTitleId, rosalinaMenuComboStr, (int)(cfg->pluginLoaderFlags & 1),
-        (int)((cfg->pluginLoaderFlags & (1 << 1)) >> 1), (int)((cfg->pluginLoaderFlags & (1 << 2)) >> 2),
-        (int)cfg->pluginWatcherLevel,
-        (int)((cfg->pluginLoaderFlags & (1 << 3)) >> 3),
+        (int)((cfg->pluginLoaderFlags & (1 << 1)) >> 1), (int)cfg->pluginWatcherLevel,
+        (int)((cfg->pluginLoaderFlags & (1 << 2)) >> 2),
         (int)cfg->ntpTzOffetMinutes,
+
+        (int)((cfg->extraConfigFlags >> 0) & 1),
+        (int)((cfg->extraConfigFlags >> 1) & 1),
+        (int)((cfg->extraConfigFlags >> 2) & 1),
+        (int)((cfg->extraConfigFlags >> 3) & 1),
+        (int)((cfg->extraConfigFlags >> 4) & 1),
+        (int)((cfg->extraConfigFlags >> 5) & 1),
+        (int)((cfg->extraConfigFlags >> 6) & 1),
 
         (int)cfg->topScreenFilter.cct, (int)cfg->bottomScreenFilter.cct,
         (int)cfg->topScreenFilter.colorCurveCorrection, (int)cfg->bottomScreenFilter.colorCurveCorrection,
@@ -208,8 +231,11 @@ static size_t LumaConfig_SaveLumaIniConfigToStr(char *out, const CfgData *cfg)
         forceAudioOutputStr,
         cfg->volumeSliderOverride,
 
-        (int)CONFIG(PATCHUNITINFO), (int)CONFIG(ENABLEDSIEXTFILTER),
-        (int)CONFIG(DISABLEARM11EXCHANDLERS), (int)CONFIG(ENABLESAFEFIRMROSALINA)
+        (int)((cfg->homeButtonSimFlags >> 0) & 1),
+        (int)((cfg->homeButtonSimFlags >> 1) & 1),
+        homeButtonComboStr,
+        (unsigned int) cfg->screenToggleTarget,
+        screenToggleComboStr
     );
 
     return n < 0 ? 0 : (size_t)n;
@@ -221,7 +247,7 @@ void LumaConfig_RequestSaveSettings(void) {
 
 Result LumaConfig_SaveSettings(void)
 {
-    char inibuf[0x2300];
+    char inibuf[0x2500];
 
     Result res;
 
@@ -268,7 +294,7 @@ Result LumaConfig_SaveSettings(void)
     configData.volumeSliderOverride = currVolumeSliderOverride;
     configData.hbldr3dsxTitleId = Luma_SharedConfig->selected_hbldr_3dsx_tid;
     configData.rosalinaMenuCombo = menuCombo;
-    configData.pluginLoaderFlags = PluginLoader__IsEnabled() | (PluginChecker_isEnabled << 1) | (PluginWatcher_isEnabled << 2) | (PluginConverter_UseCache << 3);
+    configData.pluginLoaderFlags = PluginLoader__IsEnabled() | (PluginWatcher_isEnabled << 1) | (PluginConverter_UseCache << 2);
     configData.pluginWatcherLevel = PluginWatcher_WatchLevel;
     configData.ntpTzOffetMinutes = (s16)lastNtpTzOffset;
     configData.topScreenFilter = topScreenFilter;
@@ -276,12 +302,23 @@ Result LumaConfig_SaveSettings(void)
     configData.autobootTwlTitleId = autobootTwlTitleId;
     configData.autobootCtrAppmemtype = autobootCtrAppmemtype;
 
-    size_t n = LumaConfig_SaveLumaIniConfigToStr(inibuf, &configData);
+    configData.homeButtonSimFlags = 0;
+    if (hideReturnToHomeMenu) configData.homeButtonSimFlags |= 1 << 0;
+    if (enableHomeButtonCombo) configData.homeButtonSimFlags |= 1 << 1;
+    configData.homeButtonCombo = homeButtonCombo;
+    configData.screenToggleTarget = screenToggleTarget;
+    configData.screenToggleCombo = screenToggleCombo;
 
-    // FIXME: this is UB we should port snprintf sometime (as well as fix other tech debt in Rosalina)
-    if (n + 1 >= sizeof(inibuf)) {
-        __builtin_trap();
-    }
+    configData.extraConfigFlags = 0;
+    if (configExtra.suppressLeds) configData.extraConfigFlags |= 1 << 0;
+    if (configExtra.cutSlotPower) configData.extraConfigFlags |= 1 << 1;
+    if (configExtra.cutSleepWifi) configData.extraConfigFlags |= 1 << 2;
+    if (configExtra.screenshotDateFolders) configData.extraConfigFlags |= 1 << 3;
+    if (configExtra.screenshotCombined) configData.extraConfigFlags |= 1 << 4;
+    if (configExtra.temperatureUnit) configData.extraConfigFlags |= 1 << 5;
+    if (configExtra.use12HourClock) configData.extraConfigFlags |= 1 << 6;
+
+    size_t n = LumaConfig_SaveLumaIniConfigToStr(inibuf, &configData);
 
     FS_ArchiveID archiveId = isSdMode ? ARCHIVE_SDMC : ARCHIVE_NAND_RW;
     if (n > 0)

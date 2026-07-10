@@ -30,6 +30,7 @@
 #include "service_manager.h"
 #include "errdisp.h"
 #include "utils.h"
+#include "luma_config.h"
 #include "sleep.h"
 #include "MyThread.h"
 #include "menus/miscellaneous.h"
@@ -37,6 +38,10 @@
 #include "menus/screen_filters.h"
 #include "menus/cheats.h"
 #include "menus/sysconfig.h"
+#include "menus/config_extra.h"
+#include "menus/home_button_sim.h"
+#include "menus/screen_toggle.h"
+#include "redshift/redshift.h"
 #include "input_redirection.h"
 #include "minisoc.h"
 #include "draw.h"
@@ -47,6 +52,9 @@
 #include "plugin.h"
 
 bool isN3DS;
+bool wifiOnBeforeSleep;
+
+extern config_extra configExtra;
 
 Result __sync_init(void);
 Result __sync_fini(void);
@@ -89,6 +97,9 @@ void initSystem(void)
 
     svcGetSystemInfo(&out, 0x10000, 0x103);
     lastNtpTzOffset = (s16)out;
+
+    svcGetSystemInfo(&out, 0x10000, 3);
+    instantReboot = (((u32)out >> (u32)INSTANTREBOOTNOERRDISP) & 1) != 0;
 
     for(res = 0xD88007FA; res == (Result)0xD88007FA; svcSleepThread(500 * 1000LL))
     {
@@ -173,10 +184,44 @@ static void handleShellNotification(u32 notificationId)
         // Sequence goes like this: MCU fires notif. 0x200 on shell open
         // and shell close, then NS demuxes it and fires 0x213 and 0x214.
         handleShellOpened();
-        menuShouldExit = false;
-    } else {
+
+        if(configExtra.suppressLeds){
+            mcuHwcInit();
+            u8 off = 0;
+            MCUHWC_WriteRegister(0x28, &off, 1);
+            mcuHwcExit();
+        }
+
+        if(nightLightSettingsRead && nightLightEnabled)
+        {
+            Redshift_ApplyNightLightSettings();
+        }
+
+        if(wifiOnBeforeSleep && configExtra.cutSleepWifi && isServiceUsable("nwm::EXT")){
+            nwmExtInit();
+            NWMEXT_ControlWirelessEnabled(true);
+            nwmExtExit();
+        }
+    } 
+    else {
         // Shell closed
         menuShouldExit = true;
+
+        if(configExtra.cutSleepWifi)
+        {      
+            u8 wireless = (*(vu8 *)((0x10140000 | (1u << 31)) + 0x180));
+
+            if (isServiceUsable("nwm::EXT") && wireless)
+            {
+                wifiOnBeforeSleep = true;
+                nwmExtInit();
+                NWMEXT_ControlWirelessEnabled(false);
+                nwmExtExit();
+            }
+            else {
+                wifiOnBeforeSleep = false;
+            }
+        }
     }
 
 }
@@ -252,11 +297,28 @@ static const ServiceManagerNotificationEntry notifications[] = {
     { 0x000, NULL },
 };
 
+static void cutPowerToCardSlotWhenTWLCard(void)
+{
+    FS_CardType card;
+    bool status;
+
+    if(R_SUCCEEDED(FSUSER_GetCardType(&card)) && card == 1){
+        FSUSER_CardSlotPowerOff(&status);
+    }
+}
+
 // Some changes to commit
 int main(void)
 {
     Sleep__Init();
     PluginLoader__Init();
+    ConfigExtra_ReadConfigExtra();
+    if (configExtra.cutSlotPower)
+    {
+        cutPowerToCardSlotWhenTWLCard();
+    }
+
+    nightLightSettingsRead = Redshift_ReadNightLightSettings();
 
     if(R_FAILED(svcCreateEvent(&preTerminationEvent, RESET_STICKY)))
         svcBreak(USERBREAK_ASSERT);
@@ -265,6 +327,9 @@ int main(void)
     Cheat_SeedRng(svcGetSystemTick());
     ScreenFiltersMenu_LoadConfig();
     SysConfigMenu_LoadConfig();
+    ConfigExtra_ReadConfigExtra();
+    HomeButtonSimMenu_LoadConfig();
+    ScreenToggleMenu_LoadConfig();
 
     MyThread *menuThread = menuCreateThread();
     MyThread *taskRunnerThread = taskRunnerCreateThread();

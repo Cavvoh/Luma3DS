@@ -36,7 +36,7 @@
 
 #define CONFIG_FILE         "evoconfig.ini"
 #define CONFIG_VERSIONMAJOR 3
-#define CONFIG_VERSIONMINOR 13
+#define CONFIG_VERSIONMINOR 14
 
 #define BOOTCFG_NAND         BOOTCONFIG(0, 1)
 #define BOOTCFG_EMUINDEX     BOOTCONFIG(1, 3)
@@ -64,11 +64,10 @@ enum singleOptions
     PATCHVERSTRING,
     SHOWGBABOOT,
     PATCHUNITINFO,
-    ENABLEDSIEXTFILTER,
     DISABLEARM11EXCHANDLERS,
     ENABLESAFEFIRMROSALINA,
-
-    NUMCONFIGURABLE = PATCHUNITINFO,
+    INSTANTREBOOTNOERRDISP,
+    ENABLESDBOOTTIMEPATCH,
 };
 
 typedef enum ConfigurationStatus
@@ -78,9 +77,25 @@ typedef enum ConfigurationStatus
     CREATE_CONFIGURATION
 } ConfigurationStatus;
 
+struct multiOption {
+    u32 posXs[4];
+    u32 posY;
+    u32 enabled;
+    bool visible;
+    u32 page;
+};
+
+struct singleOption {
+    u32 posY;
+    bool enabled;
+    bool visible;
+    u32 page;
+};
+
 extern CfgData configData;
 
 bool readConfig(void);
 void writeConfig(bool isConfigOptions);
+void askForUpgradeProcess(void);
 void configMenu(bool oldPinStatus, u32 oldPinMode);
 u32 getSplashDurationMs(void);

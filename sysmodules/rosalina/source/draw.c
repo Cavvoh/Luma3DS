@@ -35,6 +35,13 @@
 #include "csvc.h"
 
 #define KERNPA2VA(a)            ((a) + (GET_VERSION_MINOR(osGetKernelVersion()) < 44 ? 0xD0000000 : 0xC0000000))
+#define CURSOR_ARROW_X          15
+#define CURSOR_ARROW_END_X      (250 - SPACING_X)
+#define CURSOR_CHECKBOX_X       35
+#define CURSOR_TEXT_X_NORMAL    35
+#define CURSOR_TEXT_X_CHECKBOX  59
+#define CURSOR_MAXCHARS_NORMAL   36
+#define CURSOR_MAXCHARS_CHECKBOX 32
 
 static u32 gpuSavedFramebufferAddr1, gpuSavedFramebufferAddr2, gpuSavedFramebufferFormat, gpuSavedFramebufferStride, gpuSavedFillColor;
 static u32 framebufferCacheSize;
@@ -131,7 +138,7 @@ void Draw_ClearFramebuffer(void)
 
 Result Draw_AllocateFramebufferCache(u32 size)
 {
-    // Can't use fbs in FCRAM when HOME Menu is active (AXI config related maybe?)
+    // Can't use fbs in FCRAM when Home Menu is active (AXI config related maybe?)
     u32 addr = 0x0D000000;
     u32 tmp;
 
@@ -285,6 +292,26 @@ void Draw_CreateBitmapHeader(u8 *dst, u32 width, u32 heigth)
     Draw_WriteUnaligned(dst + 0x22, 3 * width * heigth, 4);
 }
 
+void Draw_CreateCombinedBitmapHeader(u8 *dst, u32 combinedWidth, u32 combinedHeight)
+{
+    static const u8 bmpHeaderTemplate[54] = {
+        // BITMAPFILEHEADER
+        0x42, 0x4D, 0xCC, 0xCC, 0xCC, 0xCC, 0x00, 0x00, 0x00, 0x00, 0x40 /* data offset */, 0x00, 0x00, 0x00,
+
+        // BITMAPINFOHEADER
+        0x28, 0x00, 0x00, 0x00, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0x01, 0x00, 0x18, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0xCC, 0xCC, 0xCC, 0xCC, 0x12, 0x0B, 0x00, 0x00, 0x12, 0x0B, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+
+    memcpy(dst, bmpHeaderTemplate, 54);
+    memset(dst + 54, 0, 64 - 54);
+    Draw_WriteUnaligned(dst + 2, 64 + 3 * combinedWidth * combinedHeight, 4);
+    Draw_WriteUnaligned(dst + 0x12, combinedWidth, 4);
+    Draw_WriteUnaligned(dst + 0x16, combinedHeight, 4);
+    Draw_WriteUnaligned(dst + 0x22, 3 * combinedWidth * combinedHeight, 4);
+}
+
 static inline void Draw_ConvertPixelToBGR8(u8 *dst, const u8 *src, GSPGPU_FramebufferFormat srcFormat)
 {
     u8 red, green, blue;
@@ -407,7 +434,7 @@ void Draw_DrawMenuFrame(const char *title)
     Draw_DrawString(20, 10, COLOR_LIGHT_BLUE, title);
 }
 
-void Draw_DrawMenuCursor(u32 yPos, bool selected, const char *text)
+void Draw_DrawMenuCursor(u32 yPos, bool selected, const char *text, const char *checkbox)
 {
     static int scrollOffset = 0;
     static u32 lastSelectedHash = 0;
@@ -417,55 +444,79 @@ void Draw_DrawMenuCursor(u32 yPos, bool selected, const char *text)
     const int scrollWaitFrames = 40;
     const int scrollInitialWaitFrames = 15;
 
-    char bufWithSpaces[130];
-    bufWithSpaces[0] = ' ';
-    int i = 0;
-    while (text[i] != '\0' && i < 128) {
-        bufWithSpaces[i + 1] = text[i];
-        i++;
-    }
-    bufWithSpaces[i + 1] = ' ';
-    bufWithSpaces[i + 2] = '\0';
+    bool hasCheckbox = (checkbox != NULL);
+    int textX    = hasCheckbox ? CURSOR_TEXT_X_CHECKBOX   : CURSOR_TEXT_X_NORMAL;
+    int maxChars = hasCheckbox ? CURSOR_MAXCHARS_CHECKBOX : CURSOR_MAXCHARS_NORMAL;
 
-    u32 currentHash = yPos ^ ((u32)text);
-    
-    if (selected) {
-        if (lastSelectedHash != currentHash) {
+    // Read lehgt instead of strlen again
+    char bufWithSpaces[130];
+    int len = 0;
+    bufWithSpaces[0] = ' ';
+    while (text[len] != '\0' && len < (int)sizeof(bufWithSpaces) - 3)
+    {
+        bufWithSpaces[len + 1] = text[len];
+        len++;
+    }
+    bufWithSpaces[len + 1] = ' ';
+    bufWithSpaces[len + 2] = '\0';
+    int paddedLen = len + 2;
+
+    if (hasCheckbox)
+        Draw_DrawString(CURSOR_CHECKBOX_X, yPos, selected ? COLOR_CYAN : COLOR_WHITE, checkbox);
+
+    if (selected)
+    {
+        u32 currentHash = yPos ^ (u32)text;
+        if (lastSelectedHash != currentHash)
+        {
             scrollOffset = 0;
             lastSelectedHash = currentHash;
             scrollDir = 1;
             scrollWait = scrollInitialWaitFrames;
         }
-        int titleLen = strlen(bufWithSpaces);
-        if (titleLen > 36) {
-            int maxOffset = (titleLen - 36) * 8;
-            if (scrollWait > 0) {
+
+        Draw_DrawString(CURSOR_ARROW_X, yPos, COLOR_LIGHT_BLUE, "->");
+
+        if (paddedLen > maxChars)
+        {
+            int maxOffset = (paddedLen - maxChars) * 8;
+            if (scrollWait > 0)
+            {
                 scrollWait--;
-            } else {
+            }
+            else
+            {
                 scrollOffset += scrollSpeed * scrollDir;
-                if (scrollDir == 1 && scrollOffset >= maxOffset) {
+                if (scrollDir == 1 && scrollOffset >= maxOffset)
+                {
                     scrollOffset = maxOffset;
                     scrollWait = scrollWaitFrames;
                     scrollDir = -1;
-                } else if (scrollDir == -1 && scrollOffset <= 0) {
+                }
+                else if (scrollDir == -1 && scrollOffset <= 0)
+                {
                     scrollOffset = 0;
                     scrollWait = scrollWaitFrames;
                     scrollDir = 1;
                 }
             }
-            Draw_DrawString(15, yPos, COLOR_LIGHT_BLUE, "->");
+
             char scrollBuf[37];
-            strncpy(scrollBuf, bufWithSpaces + (scrollOffset/8), 36);
-            scrollBuf[36] = '\0';
-            Draw_DrawString(35 + (SPACING_X / 2) - SPACING_X, yPos, COLOR_CYAN, scrollBuf);
-        } else {
-            Draw_DrawString(15, yPos, COLOR_LIGHT_BLUE, "->");
-            Draw_DrawString(35 + (SPACING_X / 2) - SPACING_X, yPos, COLOR_CYAN, bufWithSpaces);
+            strncpy(scrollBuf, bufWithSpaces + (scrollOffset / 8), maxChars);
+            scrollBuf[maxChars] = '\0';
+            Draw_DrawString(textX + (SPACING_X / 2) - SPACING_X, yPos, COLOR_CYAN, scrollBuf);
         }
-        Draw_DrawString(250 - SPACING_X, yPos, COLOR_LIGHT_BLUE, " <-         ");
-    } else {
-        Draw_DrawString(15, yPos, COLOR_GRAY, " ~");
+        else
+        {
+            Draw_DrawString(textX + (SPACING_X / 2) - SPACING_X, yPos, COLOR_CYAN, bufWithSpaces);
+        }
+
+        Draw_DrawString(CURSOR_ARROW_END_X, yPos, COLOR_LIGHT_BLUE, " <-         ");
+    }
+    else
+    {
+        Draw_DrawString(CURSOR_ARROW_X, yPos, COLOR_GRAY, " ~");
         Draw_DrawString(250, yPos, COLOR_WHITE, "   ");
-        Draw_DrawString(35 - SPACING_X, yPos, COLOR_WHITE, bufWithSpaces);
+        Draw_DrawString(textX - SPACING_X, yPos, COLOR_WHITE, bufWithSpaces);
     }
 }

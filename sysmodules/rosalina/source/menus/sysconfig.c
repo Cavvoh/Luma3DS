@@ -27,23 +27,28 @@
 #include <3ds.h>
 #include "luma_config.h"
 #include "menus/sysconfig.h"
+#include "menus/config_extra.h"
+#include "menus/screen_toggle.h"
 #include "memory.h"
 #include "draw.h"
 #include "fmt.h"
 #include "utils.h"
 #include "ifile.h"
 #include "luminance.h"
+#include "menu.h"
 
 Menu sysconfigMenu = {
     "System configuration menu",
     {
         { "Control volume", METHOD, .method=&SysConfigMenu_AdjustVolume},
         { "Control Wireless connection", METHOD, .method = &SysConfigMenu_ControlWifi },
+        { "Change screen brightness", METHOD, .method = &SysConfigMenu_ChangeScreenBrightness },
         { "Toggle LEDs", METHOD, .method = &SysConfigMenu_ToggleLEDs },
         { "Toggle Wireless", METHOD, .method = &SysConfigMenu_ToggleWireless },
         { "Toggle Power Button", METHOD, .method=&SysConfigMenu_TogglePowerButton },
         { "Toggle power to card slot", METHOD, .method=&SysConfigMenu_ToggleCardIfPower},
-        { "Change screen brightness", METHOD, .method = &SysConfigMenu_ChangeScreenBrightness },
+        { "Toggle Screen options...", MENU, .menu=&screenToggleMenu, .visibility=&menuCheckNoO2ds},
+        { "Extra Config...", METHOD, .method = &ConfigExtra_DrawDetailedMenu },
         {},
     }
 };
@@ -66,6 +71,9 @@ void SysConfigMenu_ToggleLEDs(void)
         Draw_DrawString(10, 50, COLOR_RED, "WARNING:");
         Draw_DrawString(10, 60, COLOR_WHITE, "  * Entering sleep mode will reset the LED state!");
         Draw_DrawString(10, 70, COLOR_WHITE, "  * LEDs cannot be toggled when the battery is low!");
+        Draw_DrawString(10, 90, COLOR_TITLE, "TIP:");
+        Draw_DrawString(10, 100, COLOR_WHITE, "  * Press SELECT anywhere in the Rosalina menu\n");
+        Draw_DrawString(10, 110, COLOR_WHITE, "    to toggle LEDs!");
 
         Draw_FlushFramebuffer();
         Draw_Unlock();
@@ -108,6 +116,9 @@ void SysConfigMenu_ToggleWireless(void)
         {
             Draw_DrawString(10, 50, COLOR_WHITE, "Current status:");
             Draw_DrawString(100, 50, (wireless ? COLOR_GREEN : COLOR_RED), (wireless ? " ON " : " OFF"));
+            Draw_DrawString(10, 70, COLOR_TITLE, "TIP:");
+            Draw_DrawString(10, 80, COLOR_WHITE, "  * Press START anywhere in the Rosalina menu\n");
+            Draw_DrawString(10, 90, COLOR_WHITE, "    to toggle Wireless!");
         }
         else
         {
@@ -420,30 +431,8 @@ static Result SysConfigMenu_ApplyVolumeOverride(void)
     s8 i2s2Volume;
     if (currVolumeSliderOverride >= 0)
     {
-        // Considering I found this table inside MCU fw bin (at around offset 0x1200 in the raw bin):
-        // 127, 126, 125, ... 56
-        // which corresponds to round(127 - 71 * (i/63)) modulo some rounding error, it is certain
-        // that the MCU writes to "Page 0/Register 117: VOL/MICDET-Pin Gain" using linear interpolation
-        // to map the slider position (0..63) to the raw gain values, using 127 ("reserved") as "mute".
-        // Indeed, the value used in all calibration data for shutter volume is -10 dB, which maps to 56.
-
-        // However, if you look at the definition of reg 0,117 closely, you will notice that the mapping
-        // to the 7-bit value is piecewise, with half the resolution (double the slope) for values mapping
-        // to -28 dB or lower, which means that the slider increases volume twice as fast below 50% position.
-
-        // LERP like MCU does, round to nearest integer
-        u8 rawPinGain = 127 - (71 * currVolumeSliderOverride + 50) / 100;
-        s8 volume;
-
-        if (rawPinGain <= 90)
-            volume = 36 - rawPinGain;
-        else if (rawPinGain >= 91 && rawPinGain <= 126)
-            volume = 126 - 2 * rawPinGain;
-        else
-            volume = -128; // mute
-
-        i2s1Volume = volume;
-        i2s2Volume = volume;
+        i2s1Volume = -128 + (((float)currVolumeSliderOverride/100.f) * 108);
+        i2s2Volume = i2s1Volume;
     }
     else
     {
@@ -558,9 +547,11 @@ void SysConfigMenu_ChangeScreenBrightness(void)
     Draw_FlushFramebuffer();
     Draw_Unlock();
 
-    // gsp:LCD GetLuminance is stubbed on O3DS so we have to implement it ourselves... damn it.
-    // Assume top and bottom screen luminances are the same (should be; if not, we'll set them to the same values).
-    u32 luminance = getCurrentLuminance(false);
+    bool hasTopScreen = (mcuInfoTable[9] != 3); // Check the model, o2ds (3) don't have a top screen
+    bool isn3dsOnly = (mcuInfoTable[9] == 2 || mcuInfoTable[9] == 4); // for auto brightness warning
+
+    u32 luminanceTop = getCurrentLuminance(true);
+    u32 luminanceBot = getCurrentLuminance(false);
     u32 minLum = getMinLuminancePreset();
     u32 maxLum = getMaxLuminancePreset();
 
@@ -572,24 +563,34 @@ void SysConfigMenu_ChangeScreenBrightness(void)
         posY = Draw_DrawFormattedString(
             10,
             posY,
-            COLOR_WHITE,
-            "Current luminance: %lu (min. %lu, max. %lu)\n\n",
-            luminance,
+            (luminanceTop > maxLum || luminanceBot > maxLum) ? COLOR_RED : COLOR_WHITE,
+            "Top: %lu, Bot: %lu (min: %lu max: %lu)\n\n",
+            luminanceTop,
+            luminanceBot,
             minLum,
             maxLum
         );
-        posY = Draw_DrawString(10, posY, COLOR_WHITE, "Controls: Up/Down for +-1, Right/Left for +-10.\n");
-        posY = Draw_DrawString(10, posY, COLOR_WHITE, "Press A to start, B to exit.\n\n");
+        posY = Draw_DrawString(10, posY, COLOR_GREEN, "Controls: \n");
+        posY = Draw_DrawString(10, posY, COLOR_WHITE, "Up/Down for +-1, Right/Left for +-10.\n");
+        posY = Draw_DrawString(10, posY, COLOR_WHITE, "Hold X/A for Top/Bottom screen only. \n");
+        if(hasTopScreen)
+        {
+            posY = Draw_DrawString(10, posY, COLOR_WHITE, "Press Y to toggle top/bottom backlight.\n\n");
+        }
+        posY = Draw_DrawString(10, posY, COLOR_TITLE, "Press START to begin, B to exit.\n\n");
 
         posY = Draw_DrawString(10, posY, COLOR_RED, "WARNING: \n");
-        posY = Draw_DrawString(10, posY, COLOR_WHITE, "  * value will be limited by calibration.\n");
-        posY = Draw_DrawString(10, posY, COLOR_WHITE, "  * bottom framebuffer will be restored until\nyou exit.");
+        posY = Draw_DrawString(10, posY, COLOR_WHITE, "  * all changes revert after sleep mode.");
+        if(isn3dsOnly)
+        {
+            posY = Draw_DrawString(10, posY, COLOR_WHITE, "\n  * auto brightness must be disabled\n    to work properly.");
+        }
         Draw_FlushFramebuffer();
         Draw_Unlock();
 
         u32 pressed = waitInputWithTimeout(1000);
 
-        if (pressed & KEY_A)
+        if (pressed & KEY_START)
             break;
 
         if (pressed & KEY_B)
@@ -607,28 +608,69 @@ void SysConfigMenu_ChangeScreenBrightness(void)
 
     // gsp:LCD will normalize the brightness between top/bottom screen, handle PWM, etc.
 
-    s32 lum = (s32)luminance;
+    s32 lumTop = (s32)luminanceTop;
+    s32 lumBot = (s32)luminanceBot;
 
-    do
-    {
+    do {
+        u32 kHeld = HID_PAD;
         u32 pressed = waitInputWithTimeout(1000);
-        if (pressed & DIRECTIONAL_KEYS)
-        {
+        if (pressed & DIRECTIONAL_KEYS) {
+            s32 increment = 0;
+            s32 currentMin = (s32)minLum;
+            s32 currentMax = (s32)maxLum;
+
             if (pressed & KEY_UP)
-                lum += 1;
+                increment = 1;
             else if (pressed & KEY_DOWN)
-                lum -= 1;
+                increment = -1;
             else if (pressed & KEY_RIGHT)
-                lum += 10;
+                increment = 10;
             else if (pressed & KEY_LEFT)
-                lum -= 10;
+                increment = -10;
 
-            lum = lum < (s32)minLum ? (s32)minLum : lum;
-            lum = lum > (s32)maxLum ? (s32)maxLum : lum;
+            if (kHeld & KEY_X) {
+                lumTop += increment;
+                lumTop = lumTop < (s32)currentMin ? (s32)currentMin : lumTop;
+                lumTop = lumTop > currentMax ? currentMax : lumTop;
+            } else if (kHeld & KEY_A) {
+                lumBot += increment;
+                lumBot = lumBot < (s32)currentMin ? (s32)currentMin : lumBot;
+                lumBot = lumBot > currentMax ? currentMax : lumBot;
+            } else {
+                lumTop += increment;
+                lumBot += increment;
+                lumTop = lumTop < (s32)currentMin ? (s32)currentMin : lumTop;
+                lumTop = lumTop > currentMax ? currentMax : lumTop;
+                lumBot = lumBot < (s32)currentMin ? (s32)currentMin : lumBot;
+                lumBot = lumBot > currentMax ? currentMax : lumBot;
+            }
 
-            // We need to call gsp here because updating the active duty LUT is a bit tedious (plus, GSP has internal state).
-            // This is actually SetLuminance:
-            GSPLCD_SetBrightnessRaw(BIT(GSP_SCREEN_TOP) | BIT(GSP_SCREEN_BOTTOM), lum);
+            if (kHeld & KEY_X)
+                GSPLCD_SetBrightnessRaw(BIT(GSP_SCREEN_TOP), lumTop);
+            else if (kHeld & KEY_A)
+                GSPLCD_SetBrightnessRaw(BIT(GSP_SCREEN_BOTTOM), lumBot);
+            else {
+                GSPLCD_SetBrightnessRaw(BIT(GSP_SCREEN_TOP), lumTop);
+                GSPLCD_SetBrightnessRaw(BIT(GSP_SCREEN_BOTTOM), lumBot);
+            }
+        }
+
+        if ((pressed & KEY_Y) && hasTopScreen) {
+            u8 result, botStatus, topStatus;
+            mcuHwcInit();
+            MCUHWC_ReadRegister(0x0F, &result, 1); // https://www.3dbrew.org/wiki/I2C_Registers#Device_3
+            mcuHwcExit();
+            botStatus = (result >> 5) & 1;
+            topStatus = (result >> 6) & 1;
+
+            if (botStatus == 1 && topStatus == 1) {
+                GSPLCD_PowerOffBacklight(BIT(GSP_SCREEN_BOTTOM));
+            } else if (botStatus == 0 && topStatus == 1) {
+                GSPLCD_PowerOnBacklight(BIT(GSP_SCREEN_BOTTOM));
+                GSPLCD_PowerOffBacklight(BIT(GSP_SCREEN_TOP));
+            } else if (topStatus == 0) {
+                GSPLCD_PowerOnBacklight(BIT(GSP_SCREEN_TOP));
+            }
         }
 
         if (pressed & KEY_B)

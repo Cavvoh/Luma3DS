@@ -26,23 +26,28 @@
 
 #include <3ds.h>
 #include <3ds/os.h>
-#include "menus.h"
 #include "menu.h"
+#include "menus.h"
 #include "draw.h"
 #include "menus/process_list.h"
 #include "menus/n3ds.h"
 #include "menus/debugger.h"
 #include "menus/miscellaneous.h"
+#include "menus/home_button_sim.h"
 #include "menus/sysconfig.h"
 #include "menus/tools.h"
 #include "menus/screen_filters.h"
 #include "menus/plugin_options.h"
+#include "menus/config_extra.h"
 #include "plugin.h"
+#include "pmdbgext.h"
 #include "ifile.h"
 #include "memory.h"
 #include "fmt.h"
 #include "process_patches.h"
 #include "luma_config.h"
+
+extern config_extra configExtra;
 
 Menu rosalinaMenu = {
     "Rosalina menu",
@@ -176,30 +181,41 @@ void RosalinaMenu_PowerOffOrReboot(void)
     do
     {
         Draw_Lock();
-        Draw_DrawMenuFrame("Power options");
-        Draw_DrawString(10, 30, COLOR_WHITE, "Press A to power off.\nPress Y to reboot.\nPress B to go back.");
+        Draw_DrawMenuFrame("Power Off / Reboot");
+        Draw_DrawString(10, 30, COLOR_WHITE, "Press A to power off.");
+        Draw_DrawString(10, 40, COLOR_WHITE, "Press Y to reboot.");
+        Draw_DrawString(10, 50, COLOR_WHITE, "Press X to force reboot.");
+        Draw_DrawString(10, 60, COLOR_WHITE, "Press B to go back.");
+        Draw_DrawString(10, 80, COLOR_WHITE, "Note: Force reboot may corrupt your SD card.");
         Draw_FlushFramebuffer();
         Draw_Unlock();
 
         u32 pressed = waitInputWithTimeout(1000);
 
-        if(pressed & KEY_Y)
+        if (pressed & KEY_Y)
         {
             menuLeave();
             APT_HardwareResetAsync();
             return;
         }
-        else if(pressed & KEY_A)
+        else if (pressed & KEY_A)
         {
             // Soft shutdown
             menuLeave();
             srvPublishToSubscriber(0x203, 0);
             return;
         }
-        else if(pressed & KEY_B)
+        else if(pressed & KEY_X)
+        {
+            // Force reboot
+            svcKernelSetState(7);
+            __builtin_unreachable();
+            return;
+        }
+        else if (pressed & KEY_B)
             return;
     }
-    while(!menuShouldExit);
+    while (!menuShouldExit);
 }
 
 void RosalinaMenu_ShowSystemInfo(void)
@@ -224,8 +240,16 @@ void RosalinaMenu_ShowSystemInfo(void)
         {
             posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "MCU FW version:     %lu.%lu\n", GET_VERSION_MAJOR(mcuFwVersion), GET_VERSION_MINOR(mcuFwVersion));
             posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "PMIC vendor:        %hhu\n", mcuInfoTable[1]);
-            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Battery vendor:     %hhu\n\n", mcuInfoTable[2]);
+            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Battery vendor:     %hhu\n", mcuInfoTable[2]);
+            posY = Draw_DrawString(10, posY, COLOR_WHITE, "\n");
         }
+
+        u64 titleId = 0;
+        Get_TitleID(&titleId);
+        if (titleId != 0)
+            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Title ID:           %016llX\n", titleId);
+        else
+            posY = Draw_DrawString(10, posY, COLOR_WHITE, "Title ID:           Not Found\n");
 
         Draw_FlushFramebuffer();
         Draw_Unlock();
@@ -299,7 +323,9 @@ void RosalinaMenu_ShowCredits(void)
         Draw_Lock();
         Draw_DrawMenuFrame("Rosalina -- Luma3DS credits");
 
-        u32 posY = Draw_DrawString(10, 30, COLOR_WHITE, "Luma3DS (c) 2016-2026 LumaTeam") + SPACING_Y;
+        u32 posY = Draw_DrawString(10, 30, COLOR_WHITE, "Evolution3DS (c) 2025-2026 Cavvoh") + SPACING_Y;
+        posY = Draw_DrawString(10, posY, COLOR_WHITE, "Based on Luma3DS (c) 2016-2026 AuroraWright, TuxSH") + SPACING_Y;
+        posY = Draw_DrawString(10, posY, COLOR_WHITE, "and on Nexus3DS (c) 2024-2026 Nexus3DS Team") + SPACING_Y;
 
         posY = Draw_DrawString(10, posY + SPACING_Y, COLOR_WHITE, "3DSX loading code by fincs");
         posY = Draw_DrawString(10, posY + SPACING_Y, COLOR_WHITE, "Networking code & basic GDB functionality by Stary");
@@ -315,7 +341,8 @@ void RosalinaMenu_ShowCredits(void)
                 "  other people\n\n"
                 "People who made this fork possible:\n"
                 "  Cavvoh, DullPointer, Tekito-256, Gruetzig,\n"
-                "  JBMagination2, hide0123, Pixel-Pop"
+                "  cooolgamer, suprdratts/hide0123, Pixel-Pop,\n"
+                "  2b-zipper"
             ));
 
         Draw_FlushFramebuffer();
@@ -328,6 +355,18 @@ void RosalinaMenu_ShowCredits(void)
 
 static s64 timeSpentConvertingScreenshot = 0;
 static s64 timeSpentWritingScreenshot = 0;
+
+static u64 GetCurrentTitleId(void)
+{
+    FS_ProgramInfo programInfo;
+    u32 pid;
+    u32 launchFlags;
+    Result res = PMDBG_GetCurrentAppInfo(&programInfo, &pid, &launchFlags);
+    if (R_FAILED(res)) {
+        return 0;
+    }
+    return programInfo.programId;
+}
 
 static Result RosalinaMenu_WriteScreenshot(IFile *file, u32 width, bool top, bool left)
 {
@@ -370,8 +409,62 @@ static Result RosalinaMenu_WriteScreenshot(IFile *file, u32 width, bool top, boo
         remaining -= lineSize * nlines * scaleFactorY;
         buf = framebufferCache;
     }
-    end:
+end:
 
+    Draw_FreeFramebufferCache();
+    return res;
+}
+
+static Result RosalinaMenu_WriteCombinedScreenshot(IFile *file, u32 topWidth, u32 bottomWidth, bool is3d)
+{
+    (void)is3d;
+    u64 total;
+    Result res = 0;
+    
+    u32 topScaleFactorY = topWidth > 400 ? 2 : 1;
+    u32 topHeightScaled = 240 * topScaleFactorY;
+    u32 bottomHeightScaled = 240;
+    u32 combinedHeight = topHeightScaled + bottomHeightScaled;
+    
+    u32 combinedWidth = topWidth;
+    u32 combinedLineSize = 3 * combinedWidth;
+    u32 totalImageSize = combinedLineSize * combinedHeight;
+    
+    TRY(Draw_AllocateFramebufferCacheForScreenshot(totalImageSize + 0x40));
+    
+    u8 *framebufferCache = (u8 *)Draw_GetFramebufferCache();
+    u8 *buf = framebufferCache;
+    
+    Draw_CreateCombinedBitmapHeader(buf, combinedWidth, combinedHeight);
+    buf += 0x40;
+    
+    s64 t0 = svcGetSystemTick();
+
+    // Convert and center bottom screen
+    u32 bottomLineSize = 3 * bottomWidth;
+    Draw_ConvertFrameBufferLines(buf, bottomWidth, 0, 240, 1, false, true);
+
+    u32 offset = (combinedWidth - bottomWidth) / 2;
+    for (int line = bottomHeightScaled - 1; line >= 0; line--) {
+        u8 *srcLine = buf + line * bottomLineSize;
+        u8 *dstLine = buf + line * combinedLineSize + offset * 3;
+        memmove(dstLine, srcLine, bottomLineSize);
+        memset(buf + line * combinedLineSize, 0, offset * 3);
+        memset(dstLine + bottomLineSize, 0, (combinedWidth - bottomWidth - offset) * 3);
+    }
+
+    // Convert top screen
+    u8 *topBuf = buf + bottomHeightScaled * combinedLineSize;
+    Draw_ConvertFrameBufferLines(topBuf, topWidth, 0, 240, topScaleFactorY, true, true);
+    
+    s64 t1 = svcGetSystemTick();
+    timeSpentConvertingScreenshot += t1 - t0;
+    
+    TRY(IFile_Write(file, &total, framebufferCache, 0x40 + totalImageSize, 0));
+    
+    timeSpentWritingScreenshot += svcGetSystemTick() - t1;
+    
+end:
     Draw_FreeFramebufferCache();
     return res;
 }
@@ -424,19 +517,64 @@ void RosalinaMenu_TakeScreenshot(void)
 
     dateTimeToString(dateTimeStr, osGetTime(), true);
 
-    sprintf(filename, "/luma/screenshots/%s_top.bmp", dateTimeStr);
-    TRY(IFile_Open(&file, archiveId, fsMakePath(PATH_EMPTY, ""), fsMakePath(PATH_ASCII, filename), FS_OPEN_CREATE | FS_OPEN_WRITE));
-    TRY(RosalinaMenu_WriteScreenshot(&file, topWidth, true, true));
-    TRY(IFile_Close(&file));
+    if (configExtra.screenshotDateFolders) {
+        res = FSUSER_OpenArchive(&archive, archiveId, fsMakePath(PATH_EMPTY, ""));
+        if (R_SUCCEEDED(res)) {
+            char dateFolderPath[64];
+            char dateOnlyStr[16];
+            
+            strncpy(dateOnlyStr, dateTimeStr, 10);
+            dateOnlyStr[10] = '\0';
+            
+            sprintf(dateFolderPath, "/luma/screenshots/%s", dateOnlyStr);
+            res = FSUSER_CreateDirectory(archive, fsMakePath(PATH_ASCII, dateFolderPath), 0);
+            if ((u32)res == 0xC82044BE) // directory already exists
+                res = 0;
+            FSUSER_CloseArchive(archive);
+        }
+        else
+        {
+            archive = 0;
+            goto end;
+        }
+    }
 
-    sprintf(filename, "/luma/screenshots/%s_bot.bmp", dateTimeStr);
-    TRY(IFile_Open(&file, archiveId, fsMakePath(PATH_EMPTY, ""), fsMakePath(PATH_ASCII, filename), FS_OPEN_CREATE | FS_OPEN_WRITE));
-    TRY(RosalinaMenu_WriteScreenshot(&file, bottomWidth, false, true));
-    TRY(IFile_Close(&file));
+    char titleIdStr[18] = {0};
+    u64 titleId = GetCurrentTitleId();
+    if (titleId != 0) {
+        sprintf(titleIdStr, "_%016llX", titleId);
+    }
 
-    if(is3d && (Draw_GetCurrentFramebufferAddress(true, true) != Draw_GetCurrentFramebufferAddress(true, false)))
+    char folderPath[64];
+    if (configExtra.screenshotDateFolders) {
+        char dateOnlyStr[16];
+        strncpy(dateOnlyStr, dateTimeStr, 10);
+        dateOnlyStr[10] = '\0';
+        sprintf(folderPath, "/luma/screenshots/%s", dateOnlyStr);
+    } else {
+        strcpy(folderPath, "/luma/screenshots");
+    }
+
+    if (configExtra.screenshotCombined) {
+        sprintf(filename, "%s/%s%s_cmb.bmp", folderPath, dateTimeStr, titleIdStr);
+        TRY(IFile_Open(&file, archiveId, fsMakePath(PATH_EMPTY, ""), fsMakePath(PATH_ASCII, filename), FS_OPEN_CREATE | FS_OPEN_WRITE));
+        TRY(RosalinaMenu_WriteCombinedScreenshot(&file, topWidth, bottomWidth, is3d));
+        TRY(IFile_Close(&file));
+    } else {
+        sprintf(filename, "%s/%s%s_top.bmp", folderPath, dateTimeStr, titleIdStr);
+        TRY(IFile_Open(&file, archiveId, fsMakePath(PATH_EMPTY, ""), fsMakePath(PATH_ASCII, filename), FS_OPEN_CREATE | FS_OPEN_WRITE));
+        TRY(RosalinaMenu_WriteScreenshot(&file, topWidth, true, true));
+        TRY(IFile_Close(&file));
+
+        sprintf(filename, "%s/%s%s_bot.bmp", folderPath, dateTimeStr, titleIdStr);
+        TRY(IFile_Open(&file, archiveId, fsMakePath(PATH_EMPTY, ""), fsMakePath(PATH_ASCII, filename), FS_OPEN_CREATE | FS_OPEN_WRITE));
+        TRY(RosalinaMenu_WriteScreenshot(&file, bottomWidth, false, true));
+        TRY(IFile_Close(&file));
+    }
+
+    if (is3d && (Draw_GetCurrentFramebufferAddress(true, true) != Draw_GetCurrentFramebufferAddress(true, false)))
     {
-        sprintf(filename, "/luma/screenshots/%s_top_right.bmp", dateTimeStr);
+        sprintf(filename, "%s/%s%s_top_right.bmp", folderPath, dateTimeStr, titleIdStr);
         TRY(IFile_Open(&file, archiveId, fsMakePath(PATH_EMPTY, ""), fsMakePath(PATH_ASCII, filename), FS_OPEN_CREATE | FS_OPEN_WRITE));
         TRY(RosalinaMenu_WriteScreenshot(&file, topWidth, true, false));
         TRY(IFile_Close(&file));
@@ -460,13 +598,13 @@ end:
         Draw_Lock();
         Draw_DrawMenuFrame("Screenshot");
         if(R_FAILED(res))
-            Draw_DrawFormattedString(10, 30, COLOR_WHITE, "Operation failed (0x%08lx).", (u32)res);
+            Draw_DrawFormattedString(10, 30, COLOR_RED, "Operation failed (0x%08lx).", (u32)res);
         else
         {
             u32 t1 = (u32)(1000 * timeSpentConvertingScreenshot / SYSCLOCK_ARM11);
             u32 t2 = (u32)(1000 * timeSpentWritingScreenshot / SYSCLOCK_ARM11);
             u32 posY = 30;
-            posY = Draw_DrawString(10, posY, COLOR_WHITE, "Operation succeeded.\n\n");
+            posY = Draw_DrawString(10, posY, COLOR_GREEN, "Operation succeeded.\n\n");
             posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Time spent converting:    %5lums\n", t1);
             posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Time spent writing files: %5lums\n", t2);
         }
@@ -516,7 +654,7 @@ void menuTakeSelfScreenshot(void)
     IFile file = {0};
     Result res = 0;
 
-    char filename[100];
+    char filename[256];
     char dateTimeStr[64];
 
     FS_Archive archive;
@@ -550,7 +688,45 @@ void menuTakeSelfScreenshot(void)
 
     dateTimeToString(dateTimeStr, osGetTime(), true);
 
-    sprintf(filename, "/luma/screenshots/rosalina_menu_%s.bmp", dateTimeStr);
+    if (configExtra.screenshotDateFolders) {
+        res = FSUSER_OpenArchive(&archive, archiveId, fsMakePath(PATH_EMPTY, ""));
+        if (R_SUCCEEDED(res)) {
+            char dateFolderPath[64];
+            char dateOnlyStr[16];
+            
+            strncpy(dateOnlyStr, dateTimeStr, 10);
+            dateOnlyStr[10] = '\0';
+            
+            sprintf(dateFolderPath, "/luma/screenshots/%s", dateOnlyStr);
+            res = FSUSER_CreateDirectory(archive, fsMakePath(PATH_ASCII, dateFolderPath), 0);
+            if ((u32)res == 0xC82044BE) // directory already exists
+                res = 0;
+            FSUSER_CloseArchive(archive);
+        }
+        else
+        {
+            archive = 0;
+            goto end;
+        }
+    }
+
+    char titleIdStr[18] = {0};
+    u64 titleId = GetCurrentTitleId();
+    if (titleId != 0) {
+        sprintf(titleIdStr, "_%016llX", titleId);
+    }
+
+    char folderPath[64];
+    if (configExtra.screenshotDateFolders) {
+        char dateOnlyStr[16];
+        strncpy(dateOnlyStr, dateTimeStr, 10);
+        dateOnlyStr[10] = '\0';
+        sprintf(folderPath, "/luma/screenshots/%s", dateOnlyStr);
+    } else {
+        strcpy(folderPath, "/luma/screenshots");
+    }
+
+    sprintf(filename, "%s/rosalina_menu_%s%s.bmp", folderPath, dateTimeStr, titleIdStr);
 
     TRY(IFile_Open(&file, archiveId, fsMakePath(PATH_EMPTY, ""), fsMakePath(PATH_ASCII, filename), FS_OPEN_CREATE | FS_OPEN_WRITE));
     TRY(menuWriteSelfScreenshot(&file));

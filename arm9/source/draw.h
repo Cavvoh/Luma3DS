@@ -32,7 +32,6 @@
 #pragma once
 
 #include "types.h"
-#include "utils.h"
 
 #define SPACING_Y 10
 #define SPACING_X 8

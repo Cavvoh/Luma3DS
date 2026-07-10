@@ -65,13 +65,11 @@ static const char *singleOptionIniNamesBoot[] = {
     "app_syscore_threads_on_core_2",
     "show_system_settings_string",
     "show_gba_boot_screen",
-};
-
-static const char *singleOptionIniNamesMisc[] = {
     "use_dev_unitinfo",
-    "enable_dsi_external_filter",
     "disable_arm11_exception_handlers",
     "enable_safe_firm_rosalina",
+    "instant_reboot_no_errdisp",
+    "enable_sd_boot_time_patch",
 };
 
 static const char *keyNames[] = {
@@ -291,22 +289,28 @@ static int parseKeyComboOption(u32 *out, const char *val)
     }
 }
 
-static void menuComboToString(char *out, u32 combo)
+static void menuComboToString(char *out, u32 combo, size_t outSize)
 {
     char *outOrig = out;
+    char *outEnd = out + outSize - 1; // Platz für Nullterminator reservieren
     out[0] = 0;
-    for(int i = 31; i >= 0; i--)
+
+    for(int i = 31; i >= 0 && out < outEnd; i--)
     {
         if(combo & (1 << i))
         {
+            size_t len = strlen(keyNames[i]);
+            if (out + len + 1 >= outEnd) break; // würde überlaufen -> abbrechen statt crashen
             strcpy(out, keyNames[i]);
-            out += strlen(keyNames[i]);
+            out += len;
             *out++ = '+';
         }
     }
 
     if (out != outOrig)
         out[-1] = 0;
+    else
+        *out = 0;
 }
 
 static int encodedFloatToString(char *out, s64 val)
@@ -360,7 +364,7 @@ static int configIniHandler(void* user, const char* section, const char* name, c
             CHECK_PARSE_OPTION(-1);
         }
     } else if (strcmp(section, "boot") == 0) {
-        // Simple options displayed on the Luma3DS boot screen
+        // Simple options displayed on the Evolution3DS boot screen
         for (size_t i = 0; i < sizeof(singleOptionIniNamesBoot)/sizeof(singleOptionIniNamesBoot[0]); i++) {
             if (strcmp(name, singleOptionIniNamesBoot[i]) == 0) {
                 bool opt;
@@ -370,7 +374,7 @@ static int configIniHandler(void* user, const char* section, const char* name, c
             }
         }
 
-        // Multi-choice options displayed on the Luma3DS boot screen
+        // Multi-choice options displayed on the Evolution3DS boot screen
 
         if (strcmp(name, "default_emunand_number") == 0) {
             s64 opt;
@@ -482,15 +486,10 @@ static int configIniHandler(void* user, const char* section, const char* name, c
             CHECK_PARSE_OPTION(parseBoolOption(&opt, value));
             cfg->pluginLoaderFlags = opt ? cfg->pluginLoaderFlags | 1 : cfg->pluginLoaderFlags & ~1;
             return 1;
-        } else if (strcmp(name, "plugin_checker_enabled") == 0) {
-            bool opt;
-            CHECK_PARSE_OPTION(parseBoolOption(&opt, value));
-            cfg->pluginLoaderFlags = opt ? cfg->pluginLoaderFlags | (1 << 1) : cfg->pluginLoaderFlags & ~(1 << 1);
-            return 1;
         } else if (strcmp(name, "plugin_watcher_enabled") == 0) {
             bool opt;
             CHECK_PARSE_OPTION(parseBoolOption(&opt, value));
-            cfg->pluginLoaderFlags = opt ? cfg->pluginLoaderFlags | (1 << 2) : cfg->pluginLoaderFlags & ~(1 << 2);
+            cfg->pluginLoaderFlags = opt ? cfg->pluginLoaderFlags | (1 << 1) : cfg->pluginLoaderFlags & ~(1 << 1);
             return 1;
         } else if (strcmp(name, "plugin_watcher_level") == 0) {
             s64 opt;
@@ -500,12 +499,47 @@ static int configIniHandler(void* user, const char* section, const char* name, c
         } else if (strcmp(name, "use_cache_in_plugin_converter") == 0) {
             bool opt;
             CHECK_PARSE_OPTION(parseBoolOption(&opt, value));
-            cfg->pluginLoaderFlags = opt ? cfg->pluginLoaderFlags | (1 << 3) : cfg->pluginLoaderFlags & ~(1 << 3);
+            cfg->pluginLoaderFlags = opt ? cfg->pluginLoaderFlags | (1 << 2) : cfg->pluginLoaderFlags & ~(1 << 2);
             return 1;
         } else if (strcmp(name, "ntp_tz_offset_min") == 0) {
             s64 opt;
             CHECK_PARSE_OPTION(parseDecIntOption(&opt, value, -779, 899));
             cfg->ntpTzOffetMinutes = (s16)opt;
+            return 1;
+        } else if (strcmp(name, "suppress_leds") == 0) {
+            bool opt;
+            CHECK_PARSE_OPTION(parseBoolOption(&opt, value));
+            cfg->extraConfigFlags = opt ? cfg->extraConfigFlags | (1 << 0) : cfg->extraConfigFlags & ~(1 << 0);
+            return 1;
+        } else if (strcmp(name, "cut_slot_power") == 0) {
+            bool opt;
+            CHECK_PARSE_OPTION(parseBoolOption(&opt, value));
+            cfg->extraConfigFlags = opt ? cfg->extraConfigFlags | (1 << 1) : cfg->extraConfigFlags & ~(1 << 1);
+            return 1;
+        } else if (strcmp(name, "cut_sleep_wifi") == 0) {
+            bool opt;
+            CHECK_PARSE_OPTION(parseBoolOption(&opt, value));
+            cfg->extraConfigFlags = opt ? cfg->extraConfigFlags | (1 << 2) : cfg->extraConfigFlags & ~(1 << 2);
+            return 1;
+        } else if (strcmp(name, "screenshot_date_folders") == 0) {
+            bool opt;
+            CHECK_PARSE_OPTION(parseBoolOption(&opt, value));
+            cfg->extraConfigFlags = opt ? cfg->extraConfigFlags | (1 << 3) : cfg->extraConfigFlags & ~(1 << 3);
+            return 1;
+        } else if (strcmp(name, "screenshot_combined") == 0) {
+            bool opt;
+            CHECK_PARSE_OPTION(parseBoolOption(&opt, value));
+            cfg->extraConfigFlags = opt ? cfg->extraConfigFlags | (1 << 4) : cfg->extraConfigFlags & ~(1 << 4);
+            return 1;
+        } else if (strcmp(name, "temperature_unit_fahrenheit") == 0) {
+            bool opt;
+            CHECK_PARSE_OPTION(parseBoolOption(&opt, value));
+            cfg->extraConfigFlags = opt ? cfg->extraConfigFlags | (1 << 5) : cfg->extraConfigFlags & ~(1 << 5);
+            return 1;
+        } else if (strcmp(name, "use_12_hour_clock") == 0) {
+            bool opt;
+            CHECK_PARSE_OPTION(parseBoolOption(&opt, value));
+            cfg->extraConfigFlags = opt ? cfg->extraConfigFlags | (1 << 6) : cfg->extraConfigFlags & ~(1 << 6);
             return 1;
         } else {
             CHECK_PARSE_OPTION(-1);
@@ -589,15 +623,6 @@ static int configIniHandler(void* user, const char* section, const char* name, c
             CHECK_PARSE_OPTION(-1);
         }
     } else if (strcmp(section, "misc") == 0) {
-        for (size_t i = 0; i < sizeof(singleOptionIniNamesMisc)/sizeof(singleOptionIniNamesMisc[0]); i++) {
-            if (strcmp(name, singleOptionIniNamesMisc[i]) == 0) {
-                bool opt;
-                CHECK_PARSE_OPTION(parseBoolOption(&opt, value));
-                cfg->config |= (u32)opt << (i + (u32)PATCHUNITINFO);
-                return 1;
-            }
-        }
-
         if (strcmp(name, "force_audio_output") == 0) {
             if (strcasecmp(value, "off") == 0) {
                 cfg->multiConfig |= 0 << (2 * (u32)FORCEAUDIOOUTPUT);
@@ -616,6 +641,31 @@ static int configIniHandler(void* user, const char* section, const char* name, c
             CHECK_PARSE_OPTION(parseDecIntOption(&opt, value, -1, 100));
             cfg->volumeSliderOverride = (s8)opt;
             return 1;
+        } else if (strcmp(name, "hide_return_to_home_menu") == 0) {
+            bool opt;
+            CHECK_PARSE_OPTION(parseBoolOption(&opt, value));
+            cfg->homeButtonSimFlags = opt ? cfg->homeButtonSimFlags | (1 << 0) : cfg->homeButtonSimFlags & ~(1 << 0);
+            return 1;
+        } else if (strcmp(name, "enable_home_button_combo") == 0) {
+            bool opt;
+            CHECK_PARSE_OPTION(parseBoolOption(&opt, value));
+            cfg->homeButtonSimFlags = opt ? cfg->homeButtonSimFlags | (1 << 1) : cfg->homeButtonSimFlags & ~(1 << 1);
+            return 1;
+        } else if (strcmp(name, "home_button_combo") == 0) {
+            u32 opt;
+            CHECK_PARSE_OPTION(parseKeyComboOption(&opt, value));
+            cfg->homeButtonCombo = opt;
+            return 1;
+        } else if (strcmp(name, "toggle_screen_target") == 0) {
+            s64 opt;
+            CHECK_PARSE_OPTION(parseDecIntOption(&opt, value, 0, 3));
+            cfg->screenToggleTarget = (u8)opt;
+            return 1;
+        } else if (strcmp(name, "toggle_screen_combo") == 0) {
+            u32 opt;
+            CHECK_PARSE_OPTION(parseKeyComboOption(&opt, value));
+            cfg->screenToggleCombo = opt;
+            return 1;
         } else {
             CHECK_PARSE_OPTION(-1);
         }
@@ -631,6 +681,8 @@ static size_t saveLumaIniConfigToStr(char *out)
     char lumaVerStr[64];
     char lumaRevSuffixStr[16];
     char rosalinaMenuComboStr[128];
+    char homeButtonComboStr[128];
+    char screenToggleComboStr[128];
 
     const char *splashPosStr;
     const char *splashDurationPresetStr;
@@ -683,6 +735,8 @@ static size_t saveLumaIniConfigToStr(char *out)
     }
 
     menuComboToString(rosalinaMenuComboStr, cfg->rosalinaMenuCombo);
+    menuComboToString(homeButtonComboStr, cfg->homeButtonCombo);
+    menuComboToString(screenToggleComboStr, cfg->screenToggleCombo);
 
     static const int pinOptionToDigits[] = { 0, 4, 6, 8 };
     int pinNumDigits = pinOptionToDigits[MULTICONFIG(PIN)];
@@ -709,6 +763,9 @@ static size_t saveLumaIniConfigToStr(char *out)
         (int)CONFIG(AUTOBOOTEMU), (int)CONFIG(LOADEXTFIRMSANDMODULES),
         (int)CONFIG(PATCHGAMES), (int)CONFIG(REDIRECTAPPTHREADS),
         (int)CONFIG(PATCHVERSTRING), (int)CONFIG(SHOWGBABOOT),
+        (int)CONFIG(PATCHUNITINFO), (int)CONFIG(DISABLEARM11EXCHANDLERS),
+        (int)CONFIG(ENABLESAFEFIRMROSALINA), (int)CONFIG(INSTANTREBOOTNOERRDISP),
+        (int)CONFIG(ENABLESDBOOTTIMEPATCH),
 
         1 + (int)MULTICONFIG(DEFAULTEMU), 4 - (int)MULTICONFIG(BRIGHTNESS),
         splashPosStr, splashDurationPresetStr, (unsigned int)cfg->splashDurationMsec,
@@ -716,10 +773,17 @@ static size_t saveLumaIniConfigToStr(char *out)
         autobootModeStr,
 
         cfg->hbldr3dsxTitleId, rosalinaMenuComboStr, (int)(cfg->pluginLoaderFlags & 1),
-        (int)((cfg->pluginLoaderFlags & (1 << 1)) >> 1), (int)((cfg->pluginLoaderFlags & (1 << 2)) >> 2),
-        (int)cfg->pluginWatcherLevel,
-        (int)((cfg->pluginLoaderFlags & (1 << 3)) >> 3),
+        (int)((cfg->pluginLoaderFlags & (1 << 1)) >> 1), (int)cfg->pluginWatcherLevel,
+        (int)((cfg->pluginLoaderFlags & (1 << 2)) >> 2),
         (int)cfg->ntpTzOffetMinutes,
+
+        (int)((cfg->extraConfigFlags >> 0) & 1),
+        (int)((cfg->extraConfigFlags >> 1) & 1),
+        (int)((cfg->extraConfigFlags >> 2) & 1),
+        (int)((cfg->extraConfigFlags >> 3) & 1),
+        (int)((cfg->extraConfigFlags >> 4) & 1),
+        (int)((cfg->extraConfigFlags >> 5) & 1),
+        (int)((cfg->extraConfigFlags >> 6) & 1),
 
         (int)cfg->topScreenFilter.cct, (int)cfg->bottomScreenFilter.cct,
         (int)cfg->topScreenFilter.colorCurveCorrection, (int)cfg->bottomScreenFilter.colorCurveCorrection,
@@ -732,15 +796,17 @@ static size_t saveLumaIniConfigToStr(char *out)
 
         forceAudioOutputStr,
         cfg->volumeSliderOverride,
-
-        (int)CONFIG(PATCHUNITINFO), (int)CONFIG(ENABLEDSIEXTFILTER),
-        (int)CONFIG(DISABLEARM11EXCHANDLERS), (int)CONFIG(ENABLESAFEFIRMROSALINA)
+        (int)((cfg->homeButtonSimFlags >> 0) & 1),
+        (int)((cfg->homeButtonSimFlags >> 1) & 1),
+        homeButtonComboStr,
+        (unsigned int) cfg->screenToggleTarget,
+        screenToggleComboStr
     );
 
     return n < 0 ? 0 : (size_t)n;
 }
 
-static char tmpIniBuffer[0x2300];
+static char tmpIniBuffer[0x2500];
 
 static bool readLumaIniConfig(void)
 {
@@ -805,7 +871,7 @@ static bool readConfigMcu(void)
         memset(&configDataMcu, 0, sizeof(CfgDataMcu));
         configData.bootConfig = 0;
         // Perform upgrade process (ignoring failures)
-        doLumaUpgradeProcess();
+        askForUpgradeProcess();
         writeConfigMcu();
 
         return false;
@@ -814,7 +880,7 @@ static bool readConfigMcu(void)
     if (configDataMcu.lumaVersion < curVer)
     {
         // Perform upgrade process (ignoring failures)
-        doLumaUpgradeProcess();
+        askForUpgradeProcess();
         writeConfigMcu();
     }
 
@@ -835,16 +901,24 @@ bool readConfig(void)
         configData.formatVersionMajor = CONFIG_VERSIONMAJOR;
         configData.formatVersionMinor = CONFIG_VERSIONMINOR;
         configData.config |= 1u << PATCHVERSTRING;
+        configData.multiConfig |= 1 << (2 * (u32)NEWCPU); // Default NEWCPU to Clock
         configData.multiConfig |= 1 << (2 * (u32)SPLASHDURATION); // Default splash duration to 3s
-        configData.splashDurationMsec = 7000;
+        configData.splashDurationMsec = 3000;
         configData.volumeSliderOverride = -1;
         configData.hbldr3dsxTitleId = HBLDR_DEFAULT_3DSX_TID;
-        configData.rosalinaMenuCombo = 1u << 9 | 1u << 7 | 1u << 2; // L+Start+Select
+        configData.rosalinaMenuCombo = 1u << 9 | 1u << 7 | 1u << 2; // L+Down+Select
         configData.topScreenFilter.cct = 6500; // default temp, no-op
         configData.topScreenFilter.gammaEnc = 1 * FLOAT_CONV_MULT; // 1.0f
         configData.topScreenFilter.contrastEnc = 1 * FLOAT_CONV_MULT; // 1.0f
         configData.bottomScreenFilter = configData.topScreenFilter;
         configData.autobootTwlTitleId = AUTOBOOT_DEFAULT_TWL_TID;
+
+        configData.extraConfigFlags = 0;
+        configData.extraConfigFlags |= 1 << 3; // screenshot_date_folders  
+        configData.extraConfigFlags |= 1 << 4; // screenshot_combined
+        configData.homeButtonCombo = 1u << 2 | 1u << 8; // Select+R
+        configData.screenToggleTarget = 0; // None - disabled
+        configData.screenToggleCombo = 1u << 3 | 1u << 2; // Start+Select
         ret = false;
     }
     else
@@ -854,6 +928,28 @@ bool readConfig(void)
     oldConfig = configData;
 
     return ret;
+}
+
+void askForUpgradeProcess(void)
+{
+    initScreens();
+
+    drawString(true, 10, 10, COLOR_LIGHT_BLUE, "Evolution3DS backup confirmation");
+    drawString(true, 10, 10 + SPACING_Y * 2, COLOR_WHITE, "Do you want to install Evolution3DS to CTRNAND?\nThis enables you to boot without an sd card.");
+    drawString(true, 10, 10 + SPACING_Y * 5, COLOR_WHITE, "Doing so will also backup essential files.");
+    drawString(true, 10, 10 + SPACING_Y * 7, COLOR_LIGHT_BLUE, "Press A to confirm, X to cancel.\nIf you're unsure, press A.");
+
+    while (true) {
+        u32 pressed = waitInput(false);
+
+        if (pressed & (BUTTON_A | BUTTON_X)) {
+            if (pressed & BUTTON_A)
+                doLumaUpgradeProcess() ? drawString(true, 10, 10 + SPACING_Y * 10, COLOR_GREEN, "Backup complete!") :
+                                         drawString(true, 10, 10 + SPACING_Y * 10, COLOR_RED, "Backup failed! Is your SD card corrupted?");
+            break;
+        }
+    }
+    wait(2000ULL);
 }
 
 u32 getSplashDurationMs(void)
@@ -890,12 +986,61 @@ void writeConfig(bool isConfigOptions)
         error("Error writing the configuration file");
 }
 
+static void drawConfigMenu(u32 *selectedOption, u32 *singleSelected,
+                           u32 multiOptionsAmount, u32 singleOptionsAmount, u32 currentPage, 
+                           struct multiOption *multiOptions, struct singleOption *singleOptions,
+                           const char **multiOptionsText, const char **singleOptionsText,
+                           const char **optionsDescription, const char *bootType)
+{
+    clearScreens(false);
+    drawString(true, 10, 10, COLOR_LIGHT_BLUE, CONFIG_TITLE);
+    if(currentPage == 1) {
+        drawString(true, 10, 10 + SPACING_Y, COLOR_LIGHT_BLUE, "Press B to save and go back");
+        drawString(true, 10, 20 + SPACING_Y, COLOR_RED, "These are expert options, use carefully!");
+    } else {
+        drawString(true, 10, 10 + SPACING_Y, COLOR_LIGHT_BLUE, "Use the DPAD and A to change settings");
+    }
+    drawFormattedString(false, 10, SCREEN_HEIGHT - 2 * SPACING_Y, COLOR_YELLOW, "Booted from %s via %s", isSdMode ? "SD" : "CTRNAND", bootType);
+    u32 endPos = 10 + 2 * SPACING_Y;
+
+    //Display all the multiple choice options in white
+    for(u32 i = 0; i < multiOptionsAmount; i++)
+    {
+        if(!multiOptions[i].visible || multiOptions[i].page != currentPage) continue;
+
+        multiOptions[i].posY = endPos + SPACING_Y;
+        endPos = drawString(true, 10, multiOptions[i].posY, COLOR_WHITE, multiOptionsText[i]);
+        drawCharacter(true, 10 + multiOptions[i].posXs[multiOptions[i].enabled] * SPACING_X, multiOptions[i].posY, COLOR_WHITE, 'x');
+    }
+
+    endPos += SPACING_Y / 2;
+
+    //Display all the normal options in white except for the first one
+    for(u32 i = 0, color = COLOR_CYAN; i < singleOptionsAmount; i++)
+    {
+        if(!singleOptions[i].visible || singleOptions[i].page != currentPage) continue;
+
+        singleOptions[i].posY = endPos + SPACING_Y;
+        endPos = drawString(true, 10, singleOptions[i].posY, color, singleOptionsText[i]);
+        if(singleOptions[i].enabled && singleOptionsText[i][0] == '(') drawCharacter(true, 10 + SPACING_X, singleOptions[i].posY, color, 'x');
+
+        if(color == COLOR_CYAN)
+        {
+            *singleSelected = i;
+            *selectedOption = i + multiOptionsAmount;
+            color = COLOR_WHITE;
+        }
+    }
+
+    drawString(false, 10, 10, COLOR_WHITE, optionsDescription[*selectedOption]);
+}
+
 void configMenu(bool oldPinStatus, u32 oldPinMode)
 {
     static const char *multiOptionsText[]  = { "Default EmuNAND: 1( ) 2( ) 3( ) 4( )",
                                                "Screen brightness: 4( ) 3( ) 2( ) 1( )",
                                                "Splash: Off( ) Before( ) After( ) payloads",
-                                               "Splash duration: 1s( ) 3s( ) 5s( ) custom( )",
+                                               "Splash duration: 1s( ) 3s( ) 5s( ) Custom( )",
                                                "PIN lock: Off( ) 4( ) 6( ) 8( ) digits",
                                                "New 3DS CPU: Off( ) Clock( ) L2( ) Clock+L2( )",
                                                "Hbmenu autoboot: Off( ) 3DS( ) DSi( )",
@@ -907,6 +1052,11 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
                                                "( ) Redirect app. syscore threads to core2",
                                                "( ) Show NAND or user string in System Settings",
                                                "( ) Show GBA boot screen in patched AGB_FIRM",
+                                               "( ) Enable development UNITINFO",
+                                               "( ) Disable arm11 exception handlers",
+                                               "( ) Enable Rosalina on SAFE_FIRM",
+                                               "( ) Enable instant reboot + disable Errdisp",
+                                               "( ) Enable SD card boot time patch",
 
                                                // Should always be the last 2 entries
                                                "\nBoot chainloader",
@@ -919,7 +1069,7 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
             "Select splash screen duration.\n\n"
             "Choose preset: 1s, 3s, 5s or custom.\n"
             "Custom reads from splash_duration_ms\n"
-            "setting in nexusconfig.ini.\n\n"
+            "setting in evoconfig.ini.\n\n"
             "Current custom value: %lu ms", 
             configData.splashDurationMsec);
 
@@ -1006,6 +1156,52 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
                                                  "Enable showing the GBA boot screen\n"
                                                  "when booting GBA games.",
 
+                                                 "Make the console be always detected\n"
+                                                 "as a development unit, and conversely.\n"
+                                                 "This is meant to install and boot\n"
+                                                 "some developer software.\n\n"
+                                                 "!YOU WILL GET ISSUES such as online\n"
+                                                 "features and Amiibos not working and\n"
+                                                 "retail CIAs installation may fail.\n\n"
+                                                 "Only select this if you know what you\n"
+                                                 "are doing!",
+
+                                                 "Disables the fatal error exception\n"
+                                                 "handlers for the Arm11 CPU.\n\n"
+                                                 "Note: Disabling the exception handlers\n"
+                                                 "will disqualify you from submitting\n"
+                                                 "issues or bug reports to the Luma3DS\n"
+                                                 "GitHub repository!\n\n"
+                                                 "Only select this if you know what you\n"
+                                                 "are doing!",
+
+                                                 "Enables Rosalina, the kernel ext.\n"
+                                                 "and sysmodule reimplementations on\n"
+                                                 "SAFE_FIRM (New 3DS only).\n\n"
+                                                 "Also suppresses QTM error 0xF96183FE,\n"
+                                                 "allowing to use 8.1-11.3 N3DS on\n"
+                                                 "New 2DS XL consoles.\n\n"
+                                                 "Only select this if you know what you\n"
+                                                 "are doing!",
+
+                                                 "Disable rebooting after an Errdisp\n"
+                                                 "error occurs. Also enable instant\n"
+                                                 "reboot combo (A + B + X + Y + Start).\n\n"
+                                                 "!WARNING! Using instant reboot may\n"
+                                                 "corrupt your SD card!\n\n"
+                                                 "Only select this if you know what you\n"
+                                                 "are doing!",
+
+                                                 "Enable SD card boot time patch.\n"
+                                                 "This patch will speed up boot by NOT\n"
+                                                 "calculating free space on SD card.\n\n"
+                                                 "!WARNING! Using this may corrupt your\n"
+                                                 "data if the sd is almost full!\n\n"
+                                                 "Use this at your own risk! You've been\n"
+                                                 "warned.\n"
+                                                 "Only enable this option if you know\n"
+                                                 "what you are doing!\n",
+
                                                 // Should always be the last 2 entries
                                                 "Boot to the Evolution3DS chainloader \nmenu.",
 
@@ -1023,34 +1219,32 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
         locateEmuNand(&nandType, &emuIndex, false);
     }
 
-    struct multiOption {
-        u32 posXs[4];
-        u32 posY;
-        u32 enabled;
-        bool visible;
-    } multiOptions[] = {
-        { .visible = nandType == FIRMWARE_EMUNAND },
-        { .visible = true },
-        { .visible = true },
-        { .visible = true },
-        { .visible = ISN3DS },
-        { .visible = true },
+    struct multiOption multiOptions[] = {
+        { .visible = nandType == FIRMWARE_EMUNAND, .page = 0 }, // Default emunand
+        { .visible = true, .page = 0 }, // Screen brightness
+        { .visible = true, .page = 0 }, // Splash
+        { .visible = true, .page = 0 }, // Splash duration
+        { .visible = true, .page = 0 }, // PIN
+        { .visible = ISN3DS, .page = 0 }, // n3ds CPU
+        { .visible = true, .page = 1 }, // Autoboot
         // { .visible = true }, audio rerouting, hidden
     };
 
-    struct singleOption {
-        u32 posY;
-        bool enabled;
-        bool visible;
-    } singleOptions[] = {
-        { .visible = nandType == FIRMWARE_EMUNAND },
-        { .visible = true },
-        { .visible = true },
-        { .visible = ISN3DS },
-        { .visible = true },
-        { .visible = true },
-        { .visible = true },
-        { .visible = true },
+    struct singleOption singleOptions[] = {
+        { .visible = nandType == FIRMWARE_EMUNAND, .page = 0 }, // Autoboot EmuNAND
+        { .visible = true, .page = 0 }, // Enable external firms and modules
+        { .visible = true, .page = 0 }, // Enable game patching
+        { .visible = ISN3DS, .page = 1 }, // Redirect app thrreads to core2
+        { .visible = true, .page = 0 }, // Show nand or user string in system settings
+        { .visible = true, .page = 0 }, // show GBA boot screen
+        { .visible = true, .page = 1 }, // Enable dev UNITINFO
+        { .visible = true, .page = 1 }, // disable arm11 exception handlers
+        { .visible = true, .page = 1 }, // Enable Rosalina on SAFE_FIRM
+        { .visible = true, .page = 1 }, // Enable instant reboot + disable Errdisp
+        { .visible = true, .page = 1 }, // Enable SD card boot time patch 
+        // Should always be visible
+        { .visible = true, .page = 0 }, // Boot chainloader
+        { .visible = true, .page = 0 }, // Save and exit
     };
 
     //Calculate the amount of the various kinds of options and pre-select the first single one
@@ -1058,7 +1252,8 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
         singleOptionsAmount = sizeof(singleOptions) / sizeof(struct singleOption),
         totalIndexes = multiOptionsAmount + singleOptionsAmount - 1,
         selectedOption = 0,
-        singleSelected = 0;
+        singleSelected = 0,
+        currentPage = 0;
     bool isMultiOption = false;
 
     //Parse the existing options
@@ -1082,47 +1277,17 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
                                        "FIRM0",
                                        "FIRM1" };
 
-    drawString(true, 10, 10, COLOR_LIGHT_BLUE, CONFIG_TITLE);
-    drawString(true, 10, 10 + SPACING_Y, COLOR_LIGHT_BLUE, "Use the DPAD and A to change settings");
-    drawFormattedString(false, 10, SCREEN_HEIGHT - 2 * SPACING_Y, COLOR_YELLOW, "Booted from %s via %s", isSdMode ? "SD" : "CTRNAND", bootTypes[(u32)bootType]);
-
-    //Character to display a selected option
-    char selected = 'x';
-
-    u32 endPos = 10 + 2 * SPACING_Y;
-
-    //Display all the multiple choice options in white
-    for(u32 i = 0; i < multiOptionsAmount; i++)
-    {
-        if(!multiOptions[i].visible) continue;
-
-        multiOptions[i].posY = endPos + SPACING_Y;
-        endPos = drawString(true, 10, multiOptions[i].posY, COLOR_WHITE, multiOptionsText[i]);
-        drawCharacter(true, 10 + multiOptions[i].posXs[multiOptions[i].enabled] * SPACING_X, multiOptions[i].posY, COLOR_WHITE, selected);
-    }
-
-    endPos += SPACING_Y / 2;
-
-    //Display all the normal options in white except for the first one
-    for(u32 i = 0, color = COLOR_CYAN; i < singleOptionsAmount; i++)
-    {
-        if(!singleOptions[i].visible) continue;
-
-        singleOptions[i].posY = endPos + SPACING_Y;
-        endPos = drawString(true, 10, singleOptions[i].posY, color, singleOptionsText[i]);
-        if(singleOptions[i].enabled && singleOptionsText[i][0] == '(') drawCharacter(true, 10 + SPACING_X, singleOptions[i].posY, color, selected);
-
-        if(color == COLOR_CYAN)
-        {
-            singleSelected = i;
-            selectedOption = i + multiOptionsAmount;
-            color = COLOR_WHITE;
-        }
-    }
-
-    drawString(false, 10, 10, COLOR_WHITE, optionsDescription[selectedOption]);
+    // Initial menu draw
+    drawConfigMenu(&selectedOption, &singleSelected, multiOptionsAmount, singleOptionsAmount, currentPage, multiOptions, singleOptions,
+                   multiOptionsText, singleOptionsText, optionsDescription, bootTypes[(u32)bootType]);
 
     bool startPressed = false;
+
+    // konami code setup
+    const u32 konamiCode[] = { BUTTON_UP, BUTTON_UP, BUTTON_DOWN, BUTTON_DOWN, BUTTON_LEFT, BUTTON_RIGHT, BUTTON_LEFT, BUTTON_RIGHT, BUTTON_B, BUTTON_A };
+	const u32 konami = sizeof(konamiCode) / sizeof(u32);
+	u32 konamiState = 0;
+
     //Boring configuration menu
     while(true)
     {
@@ -1134,8 +1299,41 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
         }
         while(!pressed);
 
+        // Check konami
+        konamiState = (pressed & konamiCode[konamiState]) ? konamiState + 1 : 0;
+
+        if(konamiState == konami)
+        {
+            // Switch to advanced page
+            konamiState = 0;
+            if(currentPage != 1)
+            {
+                currentPage = 1;
+                isMultiOption = false;
+
+                // Redraw the menu, reset selected position
+                drawConfigMenu(&selectedOption, &singleSelected, multiOptionsAmount, singleOptionsAmount, currentPage, multiOptions, singleOptions,
+                               multiOptionsText, singleOptionsText, optionsDescription, bootTypes[(u32)bootType]);
+            }
+            continue;
+        }
+        else if(pressed & BUTTON_B)
+        {
+            // Switch to main page
+            if(currentPage != 0)
+            {
+                currentPage = 0;
+                isMultiOption = false;
+
+                // Redraw the menu, reset selected position
+                drawConfigMenu(&selectedOption, &singleSelected, multiOptionsAmount, singleOptionsAmount, currentPage, multiOptions, singleOptions,
+                               multiOptionsText, singleOptionsText, optionsDescription, bootTypes[(u32)bootType]);
+            }
+            continue;
+        }
+
         // Force the selection of "save and exit" and trigger it.
-        if(pressed & BUTTON_START)
+        if(pressed & BUTTON_START && currentPage == 0)
         {
             startPressed = true;
             // This moves the cursor to the last entry
@@ -1171,7 +1369,7 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
 
                 if(selectedOption < multiOptionsAmount)
                 {
-                    if(!multiOptions[selectedOption].visible) continue;
+                    if(!multiOptions[selectedOption].visible || multiOptions[selectedOption].page != currentPage) continue;
 
                     isMultiOption = true;
                     break;
@@ -1180,7 +1378,7 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
                 {
                     singleSelected = selectedOption - multiOptionsAmount;
 
-                    if(!singleOptions[singleSelected].visible) continue;
+                    if(!singleOptions[singleSelected].visible || singleOptions[singleSelected].page != currentPage) continue;
 
                     isMultiOption = false;
                     break;
@@ -1193,13 +1391,13 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
             if(oldSelectedOption < multiOptionsAmount)
             {
                 drawString(true, 10, multiOptions[oldSelectedOption].posY, COLOR_WHITE, multiOptionsText[oldSelectedOption]);
-                drawCharacter(true, 10 + multiOptions[oldSelectedOption].posXs[multiOptions[oldSelectedOption].enabled] * SPACING_X, multiOptions[oldSelectedOption].posY, COLOR_WHITE, selected);
+                drawCharacter(true, 10 + multiOptions[oldSelectedOption].posXs[multiOptions[oldSelectedOption].enabled] * SPACING_X, multiOptions[oldSelectedOption].posY, COLOR_WHITE, 'x');
             }
             else
             {
                 u32 singleOldSelected = oldSelectedOption - multiOptionsAmount;
                 drawString(true, 10, singleOptions[singleOldSelected].posY, COLOR_WHITE, singleOptionsText[singleOldSelected]);
-                if(singleOptions[singleOldSelected].enabled) drawCharacter(true, 10 + SPACING_X, singleOptions[singleOldSelected].posY, COLOR_WHITE, selected);
+                if(singleOptions[singleOldSelected].enabled) drawCharacter(true, 10 + SPACING_X, singleOptions[singleOldSelected].posY, COLOR_WHITE, 'x');
             }
 
             if(isMultiOption) drawString(true, 10, multiOptions[selectedOption].posY, COLOR_CYAN, multiOptionsText[selectedOption]);
@@ -1214,7 +1412,7 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
             if(isMultiOption)
             {
                 u32 oldEnabled = multiOptions[selectedOption].enabled;
-                drawCharacter(true, 10 + multiOptions[selectedOption].posXs[oldEnabled] * SPACING_X, multiOptions[selectedOption].posY, COLOR_BLACK, selected);
+                drawCharacter(true, 10 + multiOptions[selectedOption].posXs[oldEnabled] * SPACING_X, multiOptions[selectedOption].posY, COLOR_BLACK, 'x');
                 multiOptions[selectedOption].enabled = (oldEnabled == 3 || !multiOptions[selectedOption].posXs[oldEnabled + 1]) ? 0 : oldEnabled + 1;
 
                 if(selectedOption == BRIGHTNESS) updateBrightness(multiOptions[BRIGHTNESS].enabled);
@@ -1236,14 +1434,14 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
                 {
                     bool oldEnabled = singleOptions[singleSelected].enabled;
                     singleOptions[singleSelected].enabled = !oldEnabled;
-                    if(oldEnabled) drawCharacter(true, 10 + SPACING_X, singleOptions[singleSelected].posY, COLOR_BLACK, selected);
+                    if(oldEnabled) drawCharacter(true, 10 + SPACING_X, singleOptions[singleSelected].posY, COLOR_BLACK, 'x');
                 }
             }
         }
 
         //In any case, if the current option is enabled (or a multiple choice option is selected) we must display a red 'x'
-        if(isMultiOption) drawCharacter(true, 10 + multiOptions[selectedOption].posXs[multiOptions[selectedOption].enabled] * SPACING_X, multiOptions[selectedOption].posY, COLOR_CYAN, selected);
-        else if(singleOptions[singleSelected].enabled && singleOptionsText[singleSelected][0] == '(') drawCharacter(true, 10 + SPACING_X, singleOptions[singleSelected].posY, COLOR_CYAN, selected);
+        if(isMultiOption) drawCharacter(true, 10 + multiOptions[selectedOption].posXs[multiOptions[selectedOption].enabled] * SPACING_X, multiOptions[selectedOption].posY, COLOR_CYAN, 'x');
+        else if(singleOptions[singleSelected].enabled && singleOptionsText[singleSelected][0] == '(') drawCharacter(true, 10 + SPACING_X, singleOptions[singleSelected].posY, COLOR_CYAN, 'x');
     }
 
     //Parse and write the new configuration

@@ -36,16 +36,26 @@
 #include "luma_config.h"
 #include "menus/n3ds.h"
 #include "menus/cheats.h"
+#include "menus/config_extra.h"
+#include "menus/home_button_sim.h"
+#include "menus/screen_toggle.h"
+#include "redshift/redshift.h"
 #include "menus/plugin_options.h"
 #include "menus/sysconfig.h"
 #include "minisoc.h"
 #include "plugin.h"
 #include "menus/screen_filters.h"
 #include "shell.h"
+#include "volume.h"
+#include "pmdbgext.h"
+
+// Temperature conversion macros
+#define CELSIUS_TO_FAHRENHEIT(c) ((c) * 9 / 5 + 32)
 
 //#define ROSALINA_MENU_SELF_SCREENSHOT 1 // uncomment this to enable the feature
 
 u32 menuCombo = 0;
+bool instantReboot = false;
 bool isHidInitialized = false;
 bool isQtmInitialized = false;
 u32 mcuFwVersion = 0;
@@ -199,11 +209,13 @@ u32 waitCombo(void)
 
 static MyThread menuThread;
 static u8 CTR_ALIGN(8) menuThreadStack[0x3000];
-static bool menuCloseRequested = false;
 
 static float batteryPercentage;
 static float batteryVoltage;
 static u8 batteryTemperature;
+// volume
+static u8 volumeSlider[2];
+static u8 dspVolumeSlider[2];
 
 static Result menuUpdateMcuInfo(void)
 {
@@ -250,6 +262,11 @@ static Result menuUpdateMcuInfo(void)
         // If it has failed, mcuFwVersion will be set to 0 again
         mcuFwVersion = SYSTEM_VERSION(major - 0x10, minor, 0);
     }
+    
+        // https://www.3dbrew.org/wiki/I2C_Registers#Device_3
+    MCUHWC_ReadRegister(0x58, dspVolumeSlider, 2); // Register-mapped ADC register
+    MCUHWC_ReadRegister(0x27, volumeSlider + 0, 1); // Raw volume slider state
+    MCUHWC_ReadRegister(0x09, volumeSlider + 1, 1); // Volume slider state
 
     if (!mcuInfoTableRead)
         mcuInfoTableRead = R_SUCCEEDED(MCUHWC_ReadRegister(0x7F, mcuInfoTable, sizeof(mcuInfoTable)));
@@ -335,6 +352,16 @@ bool menuCheckN3ds(void)
     return isN3DS;
 }
 
+bool menuCheckNoO2ds(void) {
+    char sysInfo[10] = {0};
+
+    mcuHwcInit();
+    MCUHWC_ReadRegister(0x7F, sysInfo, 10);
+    mcuHwcExit();
+
+    return (sysInfo[9] != 3);
+}
+
 u32 menuCountItems(const Menu *menu)
 {
     u32 n;
@@ -388,11 +415,62 @@ void menuThreadMain(void)
             if(isN3DS) N3DSMenu_UpdateStatus();
             PluginLoader__UpdateMenu();
             PluginLoaderOptions__UpdateMenu();
-            PluginChecker__UpdateMenu();
             PluginWatcher__UpdateMenu();
             PluginConverter__UpdateMenu();
+            nightLightSettingsRead = Redshift_ReadNightLightSettings();
+            Redshift_UpdateNightLightStatuses();
             menuShow(&rosalinaMenu);
             menuLeave();
+        }
+
+        // instant reboot combo key
+        if(instantReboot & ((scanHeldKeys() & (KEY_A | KEY_B | KEY_X | KEY_Y | KEY_START)) == (KEY_A | KEY_B | KEY_X | KEY_Y | KEY_START)))
+        {
+            svcKernelSetState(7);
+            __builtin_unreachable();
+        }
+
+        // HOME button simulation combo
+        if(enableHomeButtonCombo && homeButtonCombo != 0 && ((kHeld & homeButtonCombo) == homeButtonCombo))
+        {
+            srvPublishToSubscriber(0x204, 0);
+        }
+
+        // screen toggle
+        if (screenToggleTarget != 0 && screenToggleCombo != 0 && ((kHeld & screenToggleCombo) == screenToggleCombo))
+        {
+            u8 result;
+            char sysInfo[10] = {0};
+
+            mcuHwcInit();
+            MCUHWC_ReadRegister(0x0F, &result, 1);
+            MCUHWC_ReadRegister(0x7F, sysInfo, 10);
+            mcuHwcExit();
+
+            if (sysInfo[9] != 3) // Check the model, o2ds (3) don't have a top screen
+            {
+                gspLcdInit();
+
+                if (screenToggleTarget == 1 || screenToggleTarget == 3)
+                {
+                    if ((result >> 5) & 1) // bottom screen state
+                        GSPLCD_PowerOffBacklight(BIT(GSP_SCREEN_BOTTOM));
+                    else
+                        GSPLCD_PowerOnBacklight(BIT(GSP_SCREEN_BOTTOM));
+                }
+
+                if (screenToggleTarget == 2 || screenToggleTarget == 3)
+                {
+                    if ((result >> 6) & 1) // top screen state
+                        GSPLCD_PowerOffBacklight(BIT(GSP_SCREEN_TOP));
+                    else
+                        GSPLCD_PowerOnBacklight(BIT(GSP_SCREEN_TOP));
+                }
+
+                gspLcdExit();
+            }
+
+            while (!(waitInput() & screenToggleCombo));
         }
 
         if (saveSettingsRequest) {
@@ -408,7 +486,6 @@ void menuEnter(void)
     Draw_Lock();
     if(!menuShouldExit && menuRefCount == 0)
     {
-        menuCloseRequested = false;
         menuRefCount++;
         svcKernelSetState(0x10000, 2 | 1);
         svcSleepThread(5 * 1000 * 100LL);
@@ -439,14 +516,25 @@ void menuLeave(void)
     Draw_Unlock();
 }
 
-void menuRequestClose(void)
+u32 Get_TitleID(u64* titleId)
 {
-    menuCloseRequested = true;
+    FS_ProgramInfo programInfo;
+    u32 pid;
+    u32 launchFlags;
+    Result res = PMDBG_GetCurrentAppInfo(&programInfo, &pid, &launchFlags);
+    if (R_FAILED(res)) {
+        *titleId = 0;
+        return 0xFFFFFFFF;
+    }
+
+    *titleId = programInfo.programId;
+    return pid;
 }
 
 static void menuDraw(Menu *menu, u32 selected)
 {
     char versionString[16];
+    char evolutionVersionString[16];
     s64 out;
     u32 version, commitHash, seconds, minutes, hours, days, year, month;
     u64 milliseconds = osGetTime();
@@ -493,6 +581,9 @@ static void menuDraw(Menu *menu, u32 selected)
     days++;
     month++;
 
+    u64 titleId;
+    Get_TitleID(&titleId);
+
     Result mcuInfoRes = menuUpdateMcuInfo();
 
     svcGetSystemInfo(&out, 0x10000, 0);
@@ -509,6 +600,8 @@ static void menuDraw(Menu *menu, u32 selected)
     else
         sprintf(versionString, "v%lu.%lu.%lu", GET_VERSION_MAJOR(version), GET_VERSION_MINOR(version), GET_VERSION_REVISION(version));
 
+    sprintf(evolutionVersionString, "v%d.%d.%d", EVOLUTION_VERSION_MAJOR, EVOLUTION_VERSION_MINOR, EVOLUTION_VERSION_BUILD);
+
     Draw_DrawMenuFrame(menu->title);
     u32 numItems = menuCountItems(menu);
     u32 dispY = 0;
@@ -519,8 +612,14 @@ static void menuDraw(Menu *menu, u32 selected)
             continue;
 
         u32 yPos = 40 + dispY;
-        Draw_DrawMenuCursor(yPos, (i == selected), menu->items[i].title);
+        Draw_DrawMenuCursor(yPos, (i == selected), menu->items[i].title, NULL);
         dispY += SPACING_Y;
+    }
+
+    {
+        float coe = Volume_ExtractVolume(dspVolumeSlider[0], dspVolumeSlider[1], volumeSlider[0]);
+        u32 volInt = (u32)((coe * 100.0F) + (1 / 256.0F));
+        Draw_DrawFormattedString(SCREEN_BOT_WIDTH - 10 - SPACING_X * 12, 10, COLOR_LIGHT_BLUE, "Volume: %3lu%%", volInt);
     }
 
     if (miniSocEnabled) {
@@ -545,26 +644,41 @@ static void menuDraw(Menu *menu, u32 selected)
         u32 percentageFrac = (u32)(batteryPercentage * 10.0f) % 10u;
 
         char buf[32];
-        int n = sprintf(
-            buf, "   %02hhu\xF8""C  %lu.%02luV  %lu.%lu%%", batteryTemperature, // CP437
-            voltageInt, voltageFrac,
-            percentageInt, percentageFrac
-        );
+        int n;
+        if (configExtra.temperatureUnit) {
+            u8 tempFahrenheit = CELSIUS_TO_FAHRENHEIT(batteryTemperature);
+            n = sprintf(
+                buf, "   %02hhu\xF8""F  %lu.%02luV  %lu.%lu%%", tempFahrenheit, // CP437
+                voltageInt, voltageFrac,
+                percentageInt, percentageFrac
+            );
+        } else {
+            n = sprintf(
+                buf, "   %02hhu\xF8""C  %lu.%02luV  %lu.%lu%%", batteryTemperature, // CP437
+                voltageInt, voltageFrac,
+                percentageInt, percentageFrac
+            );
+        }
         Draw_DrawString(SCREEN_BOT_WIDTH - 10 - SPACING_X * n, SCREEN_BOT_HEIGHT - 20, COLOR_CYAN, buf);
     }
-    else
-        Draw_DrawFormattedString(SCREEN_BOT_WIDTH - 10 - SPACING_X * 19, SCREEN_BOT_HEIGHT - 20, COLOR_WHITE, "%19s", "");
 
-    if(isRelease) {
-        Draw_DrawString(10, SCREEN_BOT_HEIGHT - 30, COLOR_LIGHT_BLUE, "Evolution3DS");
+    if (isRelease) {
+        Draw_DrawFormattedString(10, SCREEN_BOT_HEIGHT - 30, COLOR_LIGHT_BLUE, "Evolution3DS %s", evolutionVersionString);
         Draw_DrawFormattedString(10, SCREEN_BOT_HEIGHT - 20, COLOR_LIGHT_BLUE, "Based on Luma3DS %s", versionString);
     } else {
-        Draw_DrawString(10, SCREEN_BOT_HEIGHT - 30, COLOR_LIGHT_BLUE, "Evolution3DS");
+        Draw_DrawFormattedString(10, SCREEN_BOT_HEIGHT - 30, COLOR_LIGHT_BLUE, "Evolution3DS %s", evolutionVersionString);
         Draw_DrawFormattedString(10, SCREEN_BOT_HEIGHT - 20, COLOR_LIGHT_BLUE, "Based on Luma3DS %s-%08lx", versionString, commitHash);
     }
     
-    Draw_DrawFormattedString(SCREEN_BOT_WIDTH - 30 - SPACING_X * 6.6, 10, COLOR_CYAN, "%02lu-%02lu-%04lu", days, month, year);
-    Draw_DrawFormattedString(SCREEN_BOT_WIDTH - 30 - SPACING_X * 4.6, 20, COLOR_CYAN, "%02lu:%02lu:%02lu", hours, minutes, seconds);
+    if (configExtra.use12HourClock) {
+        const char *ampm = (hours >= 12) ? "PM" : "AM";
+        u32 displayHours = (hours % 12 == 0) ? 12 : (hours % 12);
+        Draw_DrawFormattedString(SCREEN_BOT_WIDTH - 30 - SPACING_X * 18.6, SCREEN_BOT_HEIGHT - 20, COLOR_CYAN, "%04lu-%02lu-%02lu", year, month, days);
+        Draw_DrawFormattedString(SCREEN_BOT_WIDTH - 30 - SPACING_X * 7.6, SCREEN_BOT_HEIGHT - 20, COLOR_CYAN, "%02lu:%02lu:%02lu %s", displayHours, minutes, seconds, ampm);
+    } else {
+        Draw_DrawFormattedString(SCREEN_BOT_WIDTH - 30 - SPACING_X * 15.6, SCREEN_BOT_HEIGHT - 20, COLOR_CYAN, "%04lu-%02lu-%02lu", year, month, days);
+        Draw_DrawFormattedString(SCREEN_BOT_WIDTH - 30 - SPACING_X * 4.6, SCREEN_BOT_HEIGHT - 20, COLOR_CYAN, "%02lu:%02lu:%02lu", hours, minutes, seconds);
+    }
 
     Draw_FlushFramebuffer();
 }
@@ -581,8 +695,6 @@ void menuShow(Menu *root)
     if (menuItemIsHidden(&currentMenu->items[selectedItem]))
         selectedItem = menuAdvanceCursor(selectedItem, numItems, 1);
 
-    menuCloseRequested = false;
-
     Draw_Lock();
     Draw_ClearFramebuffer();
     Draw_FlushFramebuffer();
@@ -592,10 +704,45 @@ void menuShow(Menu *root)
 
     bool menuComboReleased = false;
 
+    u8 prevVolumeSlider[2] = {0};
+    s8 prevVolumeOverride = currVolumeSliderOverride;
+    bool firstRun = true;
+
     do
     {
         u32 pressed = waitInputWithTimeout(30);
         numItems = menuCountItems(currentMenu);
+
+        if (firstRun || currVolumeSliderOverride != prevVolumeOverride)
+        {
+            prevVolumeOverride = currVolumeSliderOverride;
+            firstRun = false;
+        }
+        else if (pressed == 0)
+        {
+            if (isServiceUsable("mcu::HWC"))
+            {
+                u8 currentVolumeSlider[2];
+                
+                Handle *mcuHwcHandlePtr = mcuHwcGetSessionHandle();
+                Handle oldHandle = *mcuHwcHandlePtr;
+                *mcuHwcHandlePtr = 0;
+                
+                if (R_SUCCEEDED(srvGetServiceHandle(mcuHwcHandlePtr, "mcu::HWC")) ||
+                    R_SUCCEEDED(svcControlService(SERVICEOP_STEAL_CLIENT_SESSION, mcuHwcHandlePtr, "mcu::HWC")))
+                {
+                    if (R_SUCCEEDED(MCUHWC_ReadRegister(0x09, currentVolumeSlider + 1, 1)))
+                    {
+                        if (currentVolumeSlider[1] != prevVolumeSlider[1])
+                        {
+                            prevVolumeSlider[1] = currentVolumeSlider[1];
+                        }
+                    }
+                    svcCloseHandle(*mcuHwcHandlePtr);
+                }
+                *mcuHwcHandlePtr = oldHandle;
+            }
+        }
 
         if(!menuComboReleased && (scanHeldKeys() & menuCombo) != menuCombo)
         {
@@ -628,9 +775,6 @@ void menuShow(Menu *root)
                     __builtin_trap(); // oops
                     break;
             }
-
-            if (menuCloseRequested)
-                break;
 
             Draw_Lock();
             Draw_ClearFramebuffer();
@@ -671,10 +815,20 @@ void menuShow(Menu *root)
                 nwmExtExit();
             }
         }
+        else if(pressed & KEY_SELECT)
+        {
+            // Toggle LEDs
+            mcuHwcInit();
+            u8 result;
+            MCUHWC_ReadRegister(0x28, &result, 1);
+            result = ~result;
+            MCUHWC_WriteRegister(0x28, &result, 1);
+            mcuHwcExit();
+        }
 
         Draw_Lock();
         menuDraw(currentMenu, selectedItem);
         Draw_Unlock();
     }
-    while(!menuShouldExit && !menuCloseRequested);
+    while(!menuShouldExit);
 }

@@ -57,6 +57,7 @@ u32 patchArm9ExceptionHandlersInstall(u8 *pos, u32 size);
 u32 patchSvcBreak9(u8 *pos, u32 size, u32 kernel9Address);
 u32 patchKernel9Panic(u8 *pos, u32 size);
 u32 patchP9AccessChecks(u8 *pos, u32 size);
+u32 patchKernel9Fs(u8 *pos, u32 size);
 u32 patchUnitInfoValueSet(u8 *pos, u32 size);
 u32 patchP9AMTicketWrapperZeroKeyIV(u8 *pos, u32 size, u32 firmVersion);
 u32 patchLgySignatureChecks(u8 *pos, u32 size);
@@ -70,4 +71,3 @@ u32 patchAgbBootSplash(u8 *pos, u32 size);
 void patchTwlBg(u8 *pos, u32 size); // silently fails
 u32 patchLgyK11(u8 *section1, u32 section1Size, u8 *section2, u32 section2Size);
 u32 patchProtoNandSignatureCheck(u8 *pos, u32 size);
-u32 patchProtoUnitinfo1200(u8 *pos, u32 size, u8 *arm9Section, u32 arm9SectionSize);

@@ -1,5 +1,6 @@
 #include <3ds.h>
 #include "menus/tools.h"
+#include "menus/home_button_sim.h"
 #include "memory.h"
 #include "draw.h"
 #include "fmt.h"
@@ -11,7 +12,7 @@ Menu toolsMenu = {
     "Tools menu",
     {
         { "Set the number of Play Coins", METHOD, .method = &ToolsMenu_EditPlayCoins },
-        { "Crash the system", METHOD, .method = &ToolsMenu_CouseCrash },
+        { "HOME button simulation options...", MENU, .menu = &homeButtonSimMenu },
         {},
     }
 };
@@ -62,7 +63,7 @@ static Result ToolsMenu_SetPlayCoins(u16 amount)
 
 void ToolsMenu_EditPlayCoins(void)
 {
-    u16 playCoins = 0;
+    u16 playCoins = 300;
     Result res = 0;
     u32 pressed = 0;
 
@@ -80,12 +81,11 @@ void ToolsMenu_EditPlayCoins(void)
             else
                 Draw_DrawFormattedString(20, 100, COLOR_RED, "Error: 0x%08lx", res);
         }
-     
-                 
-                
-        Draw_DrawString(20, 160, COLOR_GRAY, "Press B to go back.");
-           Draw_DrawString(20, 170, COLOR_RED,
-                "Changes WILL not show until you restart the HOME \n menu. \n To restart the HOME menu: \n 1. Open a software. \n 2. Suspend the software. \n 3. You should see changes now!");
+
+        Draw_DrawString(20, 120, COLOR_GRAY, "Press B to go back.");
+        Draw_DrawString(20, 140, COLOR_TITLE, "Note:");
+        
+        Draw_DrawString(20, 150, COLOR_WHITE, "Changes may not be applied immediately.\nIt will be applied once the app reloads the\nplay coins count.");
         Draw_FlushFramebuffer();
         Draw_Unlock();
     }
@@ -139,41 +139,4 @@ void ToolsMenu_EditPlayCoins(void)
             }
         }
     } while (!menuShouldExit);
-}
-
-
-static void ToolsMenu_CrashCode(void) {
-    volatile u32 *ptr = (u32*)0x0; // Nullpointer
-    *ptr = 0xDEADBEEF;             // absichtlicher Write → Data Abort
-}
-
-void ToolsMenu_CouseCrash(void) 
-{
-    Draw_Lock();
-    Draw_ClearFramebuffer();
-    Draw_FlushFramebuffer();
-    Draw_Unlock();
-
-    do
-    {
-        Draw_Lock();
-        Draw_DrawMenuFrame("Tools menu");
-        Draw_DrawString(10, 30, COLOR_WHITE, "Crash the system.");
-        Draw_DrawString(10, 50, COLOR_WHITE, "Press A to proceed.");
-        Draw_DrawString(10, 60, COLOR_WHITE, "Press B to go back.");
-        Draw_FlushFramebuffer();
-        Draw_Unlock();
-
-        u32 pressed = waitInputWithTimeout(1000);
-
-        if (pressed & KEY_A)
-        {
-            // Crash
-            ToolsMenu_CrashCode();
-            return;
-        }
-        else if (pressed & KEY_B)
-            return;
-    }
-    while (!menuShouldExit);
 }
