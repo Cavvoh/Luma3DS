@@ -6,13 +6,15 @@
 #include "fmt.h"
 #include "utils.h"
 #include "ifile.h"
+#include "cecd.h"
 
 
 Menu toolsMenu = {
     "Tools menu",
     {
-        { "Set the number of Play Coins", METHOD, .method = &ToolsMenu_EditPlayCoins },
-        { "HOME button simulation options...", MENU, .menu = &homeButtonSimMenu },
+        {"Set the number of Play Coins", METHOD, .method=&ToolsMenu_EditPlayCoins},
+        {"Reset StreetPass cooldown", METHOD, .method=&ToolsMenu_ClearMacFilter},
+        {"HOME button simulation options...", MENU, .menu=&homeButtonSimMenu},
         {},
     }
 };
@@ -137,6 +139,109 @@ void ToolsMenu_EditPlayCoins(void)
                 Draw_FlushFramebuffer();
                 Draw_Unlock();
             }
+        }
+    } while (!menuShouldExit);
+}
+
+static const char* GetCecStateName(u32 state)
+{
+    switch (state)
+    {
+        case 1: return "Idle";
+        case 2: return "Inactive";
+        case 3: return "Scanning";
+        case 4: return "Wireless Ready";
+        case 5: return "Other";
+        default: return "Unknown";
+    }
+}
+
+void ToolsMenu_ClearMacFilter(void) 
+{
+    Draw_Lock();
+    Draw_ClearFramebuffer();
+    Draw_FlushFramebuffer();
+    Draw_Unlock();
+
+    Result initRes = cecdInit();
+    u32 out = 0;
+    u32 outBefore = 0;
+    u32 ret1 = 0;
+    u32 ret2 = 0;
+    u32 pressed = 0;
+    bool shouldShowResult = false;
+
+    void updateDisplay(bool showResult) 
+    {
+        Draw_Lock();
+        Draw_ClearFramebuffer();
+        Draw_DrawMenuFrame("Tools menu");
+
+        if (R_FAILED(initRes))
+            Draw_DrawFormattedString(20, 110, COLOR_RED, "cecd init failed: 0x%08lx", initRes);
+
+		ret2 = CECDU_GetCecStateAbbreviated(&out);
+        if(ret2==0)
+        {
+            Draw_DrawFormattedString(
+                20,
+                40,
+                COLOR_WHITE,
+                "Cec State: %s",
+                GetCecStateName(out)
+            );
+        }
+        
+        Draw_DrawString(20, 60, COLOR_WHITE, "This allows you to streetpass other 3DS again");
+        Draw_DrawString(20, 70, COLOR_WHITE, "without waiting 8 hours.");
+        Draw_DrawString(20, 90, COLOR_TITLE, "Press A to begin, B to exit.");
+
+        if(showResult)
+        {
+            if (ret1!=0)
+                Draw_DrawFormattedString(20, 120, COLOR_RED, "Error: 0x%08lx", ret1);
+            else if (ret1==0)
+                Draw_DrawString(20, 120, COLOR_GREEN, "StreetPass cooldown reset.");
+        }
+
+        Draw_DrawString(20, 150, COLOR_TITLE, "Note:");
+        
+        Draw_DrawString(30, 160, COLOR_WHITE, "Only 1 of the communicating 3DS needs\na cleared MacFilter to streetpass again\nwith the other one.");
+
+        Draw_FlushFramebuffer();
+        Draw_Unlock();
+    }
+    
+    updateDisplay(false);
+
+    do
+    {
+        pressed = waitInputWithTimeout(100);
+
+        u32 currentState = out;
+        if (R_SUCCEEDED(initRes))
+            CECDU_GetCecStateAbbreviated(&currentState);
+
+        if(pressed & KEY_A)
+        {
+            if (R_SUCCEEDED(initRes))
+            {
+                ret1 = CECDU_RunCommand(CEC_COMMAND_RESET_FILTER);
+                shouldShowResult = true;
+                updateDisplay(true);
+            }
+        }
+        else if(pressed & KEY_B)
+        {
+        	if (R_SUCCEEDED(initRes))
+                cecdExit();
+            return;
+        }
+        else if(currentState != outBefore)
+        {
+            outBefore = currentState;
+            out = currentState;
+            updateDisplay(shouldShowResult);
         }
     } while (!menuShouldExit);
 }
