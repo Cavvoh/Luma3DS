@@ -630,10 +630,10 @@ static void menuDraw(Menu *menu, u32 selected)
             int n = sprintf(ipBuffer, "%hhu.%hhu.%hhu.%hhu", addr[0], addr[1], addr[2], addr[3]);
             Draw_DrawString(SCREEN_BOT_WIDTH - 10 - SPACING_X * n, SCREEN_BOT_HEIGHT - 30, COLOR_CYAN, ipBuffer);
         } else {
-            Draw_DrawFormattedString(SCREEN_BOT_WIDTH - 10 - SPACING_X * 15, SCREEN_BOT_HEIGHT - 30, COLOR_WHITE, "%15s", "");
+            Draw_DrawFormattedString(SCREEN_BOT_WIDTH - 10 - SPACING_X * 15, SCREEN_BOT_HEIGHT - 40, COLOR_WHITE, "%15s", "");
         }
     } else {
-        Draw_DrawFormattedString(SCREEN_BOT_WIDTH - 10 - SPACING_X * 15, SCREEN_BOT_HEIGHT - 30, COLOR_WHITE, "%15s", "");
+        Draw_DrawFormattedString(SCREEN_BOT_WIDTH - 10 - SPACING_X * 15, SCREEN_BOT_HEIGHT - 40, COLOR_WHITE, "%15s", "");
     }
 
     if(mcuInfoRes == 0)
@@ -659,7 +659,7 @@ static void menuDraw(Menu *menu, u32 selected)
                 percentageInt, percentageFrac
             );
         }
-        Draw_DrawString(SCREEN_BOT_WIDTH - 10 - SPACING_X * n, SCREEN_BOT_HEIGHT - 20, COLOR_CYAN, buf);
+        Draw_DrawString(SCREEN_BOT_WIDTH - 10 - SPACING_X * n, SCREEN_BOT_HEIGHT - 30, COLOR_CYAN, buf);
     }
 
     if (isRelease) {

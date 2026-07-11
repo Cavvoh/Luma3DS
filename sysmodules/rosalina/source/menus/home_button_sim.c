@@ -44,7 +44,7 @@ void HomeButtonSimMenu_LoadConfig(void)
 }
 
 Menu homeButtonSimMenu = {
-    "HOME button simulation options",
+    "Tools menu",
     {
         {"", METHOD, .method = &HomeButtonSimMenu_ToggleReturnToHomeMenu},
         {"", METHOD, .method = &HomeButtonSimMenu_ToggleEnableCombo},
@@ -83,7 +83,7 @@ void HomeButtonSimMenu_ChangeCombo(void)
     LumaConfig_ConvertComboToString(comboStrOrig, homeButtonCombo);
     
     Draw_Lock();
-    Draw_DrawMenuFrame("HOME button simulation options");
+    Draw_DrawMenuFrame("Tools menu");
     Draw_DrawFormattedString(10, 30, COLOR_WHITE, "The current HOME button combo is:  %s", comboStrOrig);
     Draw_DrawString(10, 40, COLOR_WHITE, "Please enter the new combo:");
     Draw_DrawString(10, 60, COLOR_YELLOW, "Note: Only works inside applications,");
@@ -93,7 +93,7 @@ void HomeButtonSimMenu_ChangeCombo(void)
     
     do {
         Draw_Lock();
-        Draw_DrawMenuFrame("HOME button simulation options");
+        Draw_DrawMenuFrame("Tools menu");
         Draw_DrawFormattedString(10, 30, COLOR_WHITE, "The current HOME button combo is:  %s", comboStrOrig);
         Draw_DrawFormattedString(10, 40, COLOR_WHITE, "Please enter the new combo: %s", comboStr);
         Draw_DrawString(10, 60, COLOR_YELLOW, "Note: Only works inside applications,");

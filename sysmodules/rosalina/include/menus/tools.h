@@ -6,4 +6,3 @@
 extern Menu toolsMenu;
 
 void ToolsMenu_EditPlayCoins(void);
-void ToolsMenu_CouseCrash(void);

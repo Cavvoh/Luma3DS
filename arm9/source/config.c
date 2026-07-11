@@ -289,28 +289,22 @@ static int parseKeyComboOption(u32 *out, const char *val)
     }
 }
 
-static void menuComboToString(char *out, u32 combo, size_t outSize)
+static void menuComboToString(char *out, u32 combo)
 {
     char *outOrig = out;
-    char *outEnd = out + outSize - 1; // Platz für Nullterminator reservieren
     out[0] = 0;
-
-    for(int i = 31; i >= 0 && out < outEnd; i--)
+    for(int i = 31; i >= 0; i--)
     {
         if(combo & (1 << i))
         {
-            size_t len = strlen(keyNames[i]);
-            if (out + len + 1 >= outEnd) break; // würde überlaufen -> abbrechen statt crashen
             strcpy(out, keyNames[i]);
-            out += len;
+            out += strlen(keyNames[i]);
             *out++ = '+';
         }
     }
 
     if (out != outOrig)
         out[-1] = 0;
-    else
-        *out = 0;
 }
 
 static int encodedFloatToString(char *out, s64 val)
