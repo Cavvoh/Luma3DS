@@ -36,6 +36,7 @@
 #include "menus/home_button_sim.h"
 #include "menus/sysconfig.h"
 #include "menus/tools.h"
+#include "menus/info.h"
 #include "menus/screen_filters.h"
 #include "menus/plugin_options.h"
 #include "menus/config_extra.h"
@@ -62,11 +63,10 @@ Menu rosalinaMenu = {
         { "System configuration...", MENU, .menu = &sysconfigMenu },
         { "Miscellaneous options...", MENU, .menu = &miscellaneousMenu },
         { "Tools menu...", MENU, .menu = &toolsMenu },
+        { "Info menu...", MENU, .menu = &infoMenu },
         { "Save settings", METHOD, .method = &RosalinaMenu_SaveSettings },
         { "Power options", METHOD, .method = &RosalinaMenu_PowerOffOrReboot },
-        { "System info", METHOD, .method = &RosalinaMenu_ShowSystemInfo },
         { "Credits", METHOD, .method = &RosalinaMenu_ShowCredits },
-        { "Debug info", METHOD, .method = &RosalinaMenu_ShowDebugInfo, .visibility = &rosalinaMenuShouldShowDebugInfo },
         {},
     }};
 
@@ -140,15 +140,6 @@ Result CopyFileInSdmc(const char *src, const char *dst)
     return 0;
 }
 
-bool rosalinaMenuShouldShowDebugInfo(void)
-{
-    // Don't show on release builds
-
-    s64 out;
-    svcGetSystemInfo(&out, 0x10000, 0x200);
-    return out == 0;
-}
-
 void RosalinaMenu_SaveSettings(void)
 {
     Result res = LumaConfig_SaveSettings();
@@ -216,99 +207,6 @@ void RosalinaMenu_PowerOffOrReboot(void)
             return;
     }
     while (!menuShouldExit);
-}
-
-void RosalinaMenu_ShowSystemInfo(void)
-{
-    u32 kver = osGetKernelVersion();
-
-    do
-    {
-        Draw_Lock();
-        Draw_DrawMenuFrame("Rosalina -- System info");
-
-        u32 posY = 30;
-
-        if (areScreenTypesInitialized)
-        {
-            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Top screen type:    %s\n", topScreenType);
-            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Bottom screen type: %s\n\n", bottomScreenType);
-        }
-
-        posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Kernel version:     %lu.%lu-%lu\n\n", GET_VERSION_MAJOR(kver), GET_VERSION_MINOR(kver), GET_VERSION_REVISION(kver));
-        if (mcuFwVersion != 0 && mcuInfoTableRead)
-        {
-            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "MCU FW version:     %lu.%lu\n", GET_VERSION_MAJOR(mcuFwVersion), GET_VERSION_MINOR(mcuFwVersion));
-            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "PMIC vendor:        %hhu\n", mcuInfoTable[1]);
-            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Battery vendor:     %hhu\n", mcuInfoTable[2]);
-            posY = Draw_DrawString(10, posY, COLOR_WHITE, "\n");
-        }
-
-        u64 titleId = 0;
-        Get_TitleID(&titleId);
-        if (titleId != 0)
-            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Title ID:           %016llX\n", titleId);
-        else
-            posY = Draw_DrawString(10, posY, COLOR_WHITE, "Title ID:           Not Found\n");
-
-        Draw_FlushFramebuffer();
-        Draw_Unlock();
-    }
-    while(!(waitInput() & KEY_B) && !menuShouldExit);
-}
-
-void RosalinaMenu_ShowDebugInfo(void)
-{
-    Draw_Lock();
-    Draw_ClearFramebuffer();
-    Draw_FlushFramebuffer();
-    Draw_Unlock();
-
-    char memoryMap[512];
-    formatMemoryMapOfProcess(memoryMap, 511, CUR_PROCESS_HANDLE);
-
-    s64 kextAddrSize;
-    svcGetSystemInfo(&kextAddrSize, 0x10000, 0x300);
-    u32 kextPa = (u32)((u64)kextAddrSize >> 32);
-    u32 kextSize = (u32)kextAddrSize;
-
-    FS_SdMmcSpeedInfo speedInfo;
-
-    do
-    {
-        Draw_Lock();
-        Draw_DrawMenuFrame("Rosalina -- Debug info");
-
-        u32 posY = 30;
-
-        posY = Draw_DrawString(10, posY, COLOR_WHITE, memoryMap);
-        posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Kernel ext PA: %08lx - %08lx\n\n", kextPa, kextPa + kextSize);
-        if (R_SUCCEEDED(FSUSER_GetSdmcSpeedInfo(&speedInfo)))
-        {
-            u32 clkDiv = 1 << (1 + (speedInfo.sdClkCtrl & 0xFF));
-            posY = Draw_DrawFormattedString(
-                10, posY, COLOR_WHITE, "SDMC speed: HS=%d %lukHz\n",
-                (int)speedInfo.highSpeedModeEnabled, SYSCLOCK_SDMMC / (1000 * clkDiv)
-            );
-        }
-        if (R_SUCCEEDED(FSUSER_GetNandSpeedInfo(&speedInfo)))
-        {
-            u32 clkDiv = 1 << (1 + (speedInfo.sdClkCtrl & 0xFF));
-            posY = Draw_DrawFormattedString(
-                10, posY, COLOR_WHITE, "NAND speed: HS=%d %lukHz\n",
-                (int)speedInfo.highSpeedModeEnabled, SYSCLOCK_SDMMC / (1000 * clkDiv)
-            );
-        }
-        {
-            posY = Draw_DrawFormattedString(
-                10, posY, COLOR_WHITE, "APPMEMTYPE: %lu\n",
-                OS_KernelConfig->app_memtype
-            );
-        }
-        Draw_FlushFramebuffer();
-        Draw_Unlock();
-    }
-    while(!(waitInput() & KEY_B) && !menuShouldExit);
 }
 
 void RosalinaMenu_ShowCredits(void)
