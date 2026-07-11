@@ -78,18 +78,18 @@ void ScreenToggleMenu_ChangeCombo(void)
     
     Draw_Lock();
     Draw_DrawMenuFrame("Screen toggle options");
-    Draw_DrawFormattedString(10, 30, COLOR_WHITE, "The current screen toggle combo is:  %s", comboStrOrig);
-    Draw_DrawString(10, 40, COLOR_WHITE, "Please enter the new combo:");
+    Draw_DrawFormattedString(20, 40, COLOR_WHITE, "The current screen toggle combo is:  %s", comboStrOrig);
+    Draw_DrawString(20, 50, COLOR_WHITE, "Please enter the new combo:");
     screenToggleCombo = waitCombo();
     LumaConfig_ConvertComboToString(comboStr, screenToggleCombo);
     
     do {
         Draw_Lock();
         Draw_DrawMenuFrame("Screen toggle options");
-        Draw_DrawFormattedString(10, 30, COLOR_WHITE, "The current screen toggle combo is:  %s", comboStrOrig);
-        Draw_DrawFormattedString(10, 40, COLOR_WHITE, "Please enter the new combo: %s", comboStr);
-        Draw_DrawString(10, 60, COLOR_GREEN, "Successfully changed the Screen toggle combo.");
-        Draw_DrawString(10, 80, COLOR_GRAY, "Press B to go back.");
+        Draw_DrawFormattedString(20, 40, COLOR_WHITE, "The current screen toggle combo is:  %s", comboStrOrig);
+        Draw_DrawFormattedString(20, 50, COLOR_WHITE, "Please enter the new combo: %s", comboStr);
+        Draw_DrawString(20, 70, COLOR_GREEN, "Successfully changed the Screen toggle combo.");
+        Draw_DrawString(20, 90, COLOR_GRAY, "Press B to go back.");
         Draw_FlushFramebuffer();
         Draw_Unlock();
     } while (!(waitInput() & KEY_B) && !menuShouldExit);

@@ -5,25 +5,53 @@
 **Evolution3DS** is an unofficial fork of [Luma3DS](https://github.com/LumaTeam/Luma3DS). This project combines features of several Luma3DS forks that I like.
 
 ## Added/Changed Features
-- Changed the configuration file name to `evoconfig.ini`
-- Changed the colors of the Rosalina and Configuration menu
-- Tools menu
-- Option to crash the system for fun
-- Set the number of Play Coins  
-  ↳ [Original: Gruetzig](https://github.com/Gruetzig/Luma3DS/commit/1e329b55dade61ba74a0bb1cc6e59d2504d0bde1)
-- Plugin selector  
-  ↳ [Original: Tekito-256](https://github.com/Tekito-256/Luma3DS)  
-  ↳ *Note: After setting a default plugin, hold Select while launching a game to open the plugin selector*
-- Dangerous plugin detection  
-  ↳ [Original: Tekito-256](https://github.com/Tekito-256/Luma3DS)
-- Support for v0.5.x 3GX plugin loading  
-  ↳ [Original: Tekito-256](https://github.com/Tekito-256/Luma3DS)
-- Time display in Rosalina menu  
-  ↳ [Original: JBMagination2/hide0123](https://github.com/JBMagination2/Luma3DS/commit/766173d65eeb52baac90e9e68b456ad93ebaab7b)
-- Logo.bin loading feature  
-  ↳ [Original: Pixel-Pop](https://github.com/Pixel-Pop/Luma3DS/commit/d225d9fa507dcccce3a6c86d0a38f7998f39b7a2)
-- N3DS clock + L2 status display in Rosalina menu  
-  ↳ [Original: DullPointer](https://github.com/DullPointer/Luma3DS/commit/2dbfa8b5c9b719b7f3056691f54332f42da6de8d)
+* Changed the configuration file name to `evoconfig.ini`
+* Changed the colors of the Rosalina and Configuration menu
+* Tools menu
+* Reset the StreetPass 8h cooldown to streetpass other 3DS again
+* Set the number of Play Coins - *Original by [Gruetzig](https://github.com/Gruetzig/Luma3DS/commit/1e329b55dade61ba74a0bb1cc6e59d2504d0bde1)*
+* Plugin selector - *Original by [Tekito-256](https://github.com/Tekito-256/Luma3DS)*  
+  > **Note:** After setting a default plugin, hold Select while launching a game to open the plugin selector*
+* Plugin Watcher - *Original by [Tekito-256](https://github.com/Tekito-256/Luma3DS)*  
+  > **Note:** Monitors and alerts on potentially sensitive plugin operations (file/directory deletion, network connections, camera access). When enabled, displays a confirmation dialog allowing you to continue or block the operation
+* Support for v0.5.x 3GX plugin loading - *Original by [Tekito-256](https://github.com/Tekito-256/Luma3DS)*
+* Force reboot option - *Original by [cooolgamer](https://github.com/cooolgamer)*
+* Time display in Rosalina menu - *Original by [suprdratts/hide0123](https://github.com/suprdratts/Luma3DS/commit/766173d65eeb52baac90e9e68b456ad93ebaab7b)*
+* Logo.bin loading feature - *Original by [Pixel-Pop](https://github.com/Pixel-Pop/Luma3DS/commit/d225d9fa507dcccce3a6c86d0a38f7998f39b7a2)*
+* Detailed screen brightness adjustment - *Original by [DullPointer](https://github.com/DullPointer/Luma3DS/commit/83e8d471a377bc6960fae00d6694f5fe86dcca42)*
+* Volume display in Rosalina menu - *Original by [DullPointer](https://github.com/DullPointer/Luma3DS_archive/commit/dc636d82492d1e87eb51785fa7f2a98617e7ece9)*
+* N3DS clock + L2 status display in Rosalina menu - *Original by [DullPointer](https://github.com/DullPointer/Luma3DS/commit/2dbfa8b5c9b719b7f3056691f54332f42da6de8d)*
+
+* Title ID display in System info
+
+* **HOME button simulation options** in Tools menu:
+  * Toggle visibility of "Return to HOME Menu" option (useful if your HOME button is broken)
+  * Enable/disable HOME button combo simulation
+  * Configure key combo to simulate HOME button press  
+  > **Note:** HOME button key combo only works inside applications, not on HOME Menu
+* Merged "Enable DSi external filters" option into "Enable loading external FIRMs and modules" option in configuration menu
+* Restored "Enable dev UNITINFO" and "Enable Rosalina on SAFE_FIRM" options in configuration menu
+* Re-added splash duration setting option in configuration menu (custom values also supported)
+* Added no errdisp + instant reboot option - Press A+B+X+Y+Start to instantly reboot  
+  > **Note:** Configurable via `nexusconfig.ini` only. Using instant reboot may corrupt your SD card
+* Day/Night mode allowing to change the brightness, toggle LEDs, etc. At a desired time - *Original by [cooolgamer](https://github.com/cooolgamorg/Starlight3DS/commit/d0eb60bc21f464e7269dc7b93416e89423232de9) based on [DullPointer](https://github.com/DullPointer/Luma3DS_archive/commit/54cdedce2a55b8deae730d0af077ee2907f0444b)*
+* Random little messages in the arm11/9 exception handler :)
+* Screenshots include title ID in filename
+* Customizable LCD backlight toggle shortcut (Does not work on old 2DS)
+* Experimental faster boot time for big sd cards (Expert option, may corrupt your sd card if full)
+
+**Extra Configuration Menu Options:**
+* Automatically suppress LEDs - *Original by [DullPointer](https://github.com/DullPointer/Luma3DS/commit/174ed486ab59bd249488c9035682fa7d058d1e80)*
+* Cut power to TWL Flashcards - *Original by [DullPointer](https://github.com/DullPointer/Luma3DS/commit/174ed486ab59bd249488c9035682fa7d058d1e80)*
+* Cut 3DS Wifi in sleep mode - *Original by [DullPointer](https://github.com/DullPointer/Luma3DS/commit/174ed486ab59bd249488c9035682fa7d058d1e80)*
+* Save screenshots in date folders
+* Combine top/bottom screenshots (saved with _cmb suffix)
+
+* Use Fahrenheit for temperature display (defaults to Celsius)
+* Use 12-hour clock format in Rosalina menu (defaults to 24-hour)
+
+**Expert Zone:**
+- To toggle hidden options quickly, you can use the Konami code on the luma configuration menu. WARNING: These are advanced options not meant to be used by regular users, use carefully!
 
 For detailed technical information, please refer to the [official Luma3DS documentation](https://github.com/LumaTeam/Luma3DS/wiki) and [README](https://github.com/LumaTeam/Luma3DS/blob/master/README.md).
 

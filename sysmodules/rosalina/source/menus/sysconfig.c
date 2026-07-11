@@ -67,13 +67,15 @@ void SysConfigMenu_ToggleLEDs(void)
     {
         Draw_Lock();
         Draw_DrawMenuFrame("System configuration menu");
-        Draw_DrawString(10, 30, COLOR_WHITE, "Press A to toggle, press B to go back.");
-        Draw_DrawString(10, 50, COLOR_RED, "WARNING:");
-        Draw_DrawString(10, 60, COLOR_WHITE, "  * Entering sleep mode will reset the LED state!");
-        Draw_DrawString(10, 70, COLOR_WHITE, "  * LEDs cannot be toggled when the battery is low!");
-        Draw_DrawString(10, 90, COLOR_TITLE, "TIP:");
-        Draw_DrawString(10, 100, COLOR_WHITE, "  * Press SELECT anywhere in the Rosalina menu\n");
-        Draw_DrawString(10, 110, COLOR_WHITE, "    to toggle LEDs!");
+        Draw_DrawString(20, 40, COLOR_WHITE, "Press A to toggle, press B to go back.");
+        Draw_DrawString(20, 60, COLOR_RED, "WARNING:");
+        Draw_DrawString(20, 70, COLOR_WHITE, "  * Entering sleep mode will reset the LED\n");
+        Draw_DrawString(20, 80, COLOR_WHITE, "    state!");
+        Draw_DrawString(20, 90, COLOR_WHITE, "  * LEDs cannot be toggled when the battery\n");
+        Draw_DrawString(20, 100, COLOR_WHITE, "    is low!");
+        Draw_DrawString(20, 120, COLOR_TITLE, "TIP:");
+        Draw_DrawString(20, 130, COLOR_WHITE, "  * Press SELECT anywhere in the\n");
+        Draw_DrawString(20, 140, COLOR_WHITE, "    Rosalina menu to toggle LEDs!");
 
         Draw_FlushFramebuffer();
         Draw_Unlock();
@@ -108,24 +110,24 @@ void SysConfigMenu_ToggleWireless(void)
     {
         Draw_Lock();
         Draw_DrawMenuFrame("System configuration menu");
-        Draw_DrawString(10, 30, COLOR_WHITE, "Press A to toggle, press B to go back.");
+        Draw_DrawString(20, 40, COLOR_WHITE, "Press A to toggle, press B to go back.");
 
         u8 wireless = (*(vu8 *)((0x10140000 | (1u << 31)) + 0x180));
 
         if(nwmRunning)
         {
-            Draw_DrawString(10, 50, COLOR_WHITE, "Current status:");
-            Draw_DrawString(100, 50, (wireless ? COLOR_GREEN : COLOR_RED), (wireless ? " ON " : " OFF"));
-            Draw_DrawString(10, 70, COLOR_TITLE, "TIP:");
-            Draw_DrawString(10, 80, COLOR_WHITE, "  * Press START anywhere in the Rosalina menu\n");
-            Draw_DrawString(10, 90, COLOR_WHITE, "    to toggle Wireless!");
+            Draw_DrawString(20, 60, COLOR_WHITE, "Current status:");
+            Draw_DrawString(110, 60, (wireless ? COLOR_GREEN : COLOR_RED), (wireless ? " ON " : " OFF"));
+            Draw_DrawString(20, 80, COLOR_TITLE, "TIP:");
+            Draw_DrawString(20, 90, COLOR_WHITE, "  * Press START anywhere in the Rosalina menu\n");
+            Draw_DrawString(20, 100, COLOR_WHITE, "    to toggle Wireless!");
         }
         else
         {
-            Draw_DrawString(10, 50, COLOR_RED, "NWM isn't running.");
-            Draw_DrawString(10, 60, COLOR_RED, "If you're currently on Test Menu,");
-            Draw_DrawString(10, 70, COLOR_RED, "exit then press R+RIGHT to toggle the WiFi.");
-            Draw_DrawString(10, 80, COLOR_RED, "Otherwise, simply exit and wait a few seconds.");
+            Draw_DrawString(20, 60, COLOR_RED, "NWM isn't running.");
+            Draw_DrawString(20, 70, COLOR_RED, "If you're currently on Test Menu,");
+            Draw_DrawString(20, 80, COLOR_RED, "exit then press R+RIGHT to toggle the WiFi.");
+            Draw_DrawString(20, 90, COLOR_RED, "Otherwise, simply exit and wait a few seconds.");
         }
 
         Draw_FlushFramebuffer();
@@ -243,10 +245,10 @@ void SysConfigMenu_TogglePowerButton(void)
     {
         Draw_Lock();
         Draw_DrawMenuFrame("System configuration menu");
-        Draw_DrawString(10, 30, COLOR_WHITE, "Press A to toggle, press B to go back.");
+        Draw_DrawString(20, 40, COLOR_WHITE, "Press A to toggle, press B to go back.");
 
-        Draw_DrawString(10, 50, COLOR_WHITE, "Current status:");
-        Draw_DrawString(100, 50, (((mcuIRQMask & 0x00000001) == 0x00000001) ? COLOR_RED : COLOR_GREEN), (((mcuIRQMask & 0x00000001) == 0x00000001) ? " DISABLED" : " ENABLED "));
+        Draw_DrawString(20, 60, COLOR_WHITE, "Current status:");
+        Draw_DrawString(110, 60, (((mcuIRQMask & 0x00000001) == 0x00000001) ? COLOR_RED : COLOR_GREEN), (((mcuIRQMask & 0x00000001) == 0x00000001) ? " DISABLED" : " ENABLED "));
 
         Draw_FlushFramebuffer();
         Draw_Unlock();
@@ -292,12 +294,12 @@ void SysConfigMenu_ControlWifi(void)
     {
         Draw_Lock();
         Draw_DrawMenuFrame("System configuration menu");
-        u32 posY = Draw_DrawString(10, 30, COLOR_WHITE, "Press A to force a connection to slot, B to go back\n\n");
+        u32 posY = Draw_DrawString(20, 40, COLOR_WHITE, "Press A to force a connection to slot,\nB to go back\n\n");
 
         for (u32 i = 0; i < 3; i++)
         {
-            Draw_DrawString(10, posY + SPACING_Y * i, COLOR_LIGHT_BLUE, slot == i ? ">" : " ");
-            Draw_DrawFormattedString(30, posY + SPACING_Y * i, COLOR_WHITE, "[%d] %s", (int)i + 1, ssids[i]);
+            Draw_DrawString(20, posY + SPACING_Y * i, COLOR_LIGHT_BLUE, slot == i ? "->" : "  ");
+            Draw_DrawFormattedString(40, posY + SPACING_Y * i, COLOR_WHITE, "[%d] %s", (int)i + 1, ssids[i]);
         }
 
         Draw_FlushFramebuffer();
@@ -372,10 +374,10 @@ void SysConfigMenu_ToggleCardIfPower(void)
 
         Draw_Lock();
         Draw_DrawMenuFrame("System configuration menu");
-        u32 posY = Draw_DrawString(10, 30, COLOR_WHITE, "Press A to toggle, press B to go back.\n\n");
-        posY = Draw_DrawString(10, posY, COLOR_WHITE, "Inserting or removing a card will reset the status,\nand you'll need to reinsert the cart if you want to\nplay it.\n\n");
-        Draw_DrawString(10, posY, COLOR_WHITE, "Current status:");
-        Draw_DrawString(100, posY, !cardIfStatus ? COLOR_RED : COLOR_GREEN, !cardIfStatus ? " DISABLED" : " ENABLED ");
+        u32 posY = Draw_DrawString(20, 40, COLOR_WHITE, "Press A to toggle, press B to go back.\n\n");
+        posY = Draw_DrawString(20, posY, COLOR_WHITE, "Inserting or removing a card will reset\nthe status, and you'll need to reinsert the cart\nif you want to play it.\n\n");
+        Draw_DrawString(20, posY, COLOR_WHITE, "Current status:");
+        Draw_DrawString(110, posY, !cardIfStatus ? COLOR_RED : COLOR_GREEN, !cardIfStatus ? " DISABLED" : " ENABLED ");
 
         Draw_FlushFramebuffer();
         Draw_Unlock();
@@ -501,13 +503,13 @@ void SysConfigMenu_AdjustVolume(void)
     {
         Draw_Lock();
         Draw_DrawMenuFrame("System configuration menu");
-        u32 posY = Draw_DrawString(10, 30, COLOR_WHITE, "Y: Toggle volume slider override.\nDPAD/CPAD: Adjust the volume level.\nA: Apply\nB: Go back\n\n");
-        Draw_DrawString(10, posY, COLOR_WHITE, "Current status:");
-        posY = Draw_DrawString(100, posY, (tempVolumeOverride == -1) ? COLOR_RED : COLOR_GREEN, (tempVolumeOverride == -1) ? " DISABLED" : " ENABLED ");
+        u32 posY = Draw_DrawString(20, 40, COLOR_WHITE, "Y: Toggle volume slider override.\nDPAD/CPAD: Adjust the volume level.\nA: Apply\nB: Go back\n\n");
+        Draw_DrawString(20, posY, COLOR_WHITE, "Current status:");
+        posY = Draw_DrawString(110, posY, (tempVolumeOverride == -1) ? COLOR_RED : COLOR_GREEN, (tempVolumeOverride == -1) ? " DISABLED" : " ENABLED ");
         if (tempVolumeOverride != -1) {
-            posY = Draw_DrawFormattedString(30, posY, COLOR_WHITE, "\nValue: [%d%%]    ", tempVolumeOverride);
+            posY = Draw_DrawFormattedString(40, posY, COLOR_WHITE, "\nValue: [%d%%]    ", tempVolumeOverride);
         } else {
-            posY = Draw_DrawString(30, posY, COLOR_WHITE, "\n                 ");
+            posY = Draw_DrawString(40, posY, COLOR_WHITE, "\n                 ");
         }
 
         Draw_FlushFramebuffer();
@@ -523,15 +525,15 @@ void SysConfigMenu_AdjustVolume(void)
             Result res = SysConfigMenu_ApplyVolumeOverride();
             LumaConfig_SaveSettings();
             if (R_SUCCEEDED(res))
-                Draw_DrawString(10, posY, COLOR_GREEN, "\nSuccess!");
+                Draw_DrawString(20, posY, COLOR_GREEN, "\nSuccess!");
             else
-                Draw_DrawFormattedString(10, posY, COLOR_RED, "\nFailed: 0x%08lX", res);
+                Draw_DrawFormattedString(20, posY, COLOR_RED, "\nFailed: 0x%08lX", res);
         }
         else if(pressed & KEY_B)
             return;
         else if(pressed & KEY_Y)
         {
-            Draw_DrawString(10, posY, COLOR_WHITE, "\n                 ");
+            Draw_DrawString(20, posY, COLOR_WHITE, "\n                 ");
             if (tempVolumeOverride == -1) {
                 tempVolumeOverride = backupVolumeOverride;
             } else {
@@ -541,7 +543,7 @@ void SysConfigMenu_AdjustVolume(void)
         }
         else if ((pressed & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT)) && tempVolumeOverride != -1)
         {
-            Draw_DrawString(10, posY, COLOR_WHITE, "\n                 ");
+            Draw_DrawString(20, posY, COLOR_WHITE, "\n                 ");
             if (pressed & KEY_UP)
                 tempVolumeOverride++;
             else if (pressed & KEY_DOWN)
@@ -581,9 +583,9 @@ void SysConfigMenu_ChangeScreenBrightness(void)
     {
         Draw_Lock();
         Draw_DrawMenuFrame("Screen brightness");
-        u32 posY = 30;
+        u32 posY = 40;
         posY = Draw_DrawFormattedString(
-            10,
+            20,
             posY,
             (luminanceTop > maxLum || luminanceBot > maxLum) ? COLOR_RED : COLOR_WHITE,
             "Top: %lu, Bot: %lu (min: %lu max: %lu)\n\n",
@@ -592,20 +594,20 @@ void SysConfigMenu_ChangeScreenBrightness(void)
             minLum,
             maxLum
         );
-        posY = Draw_DrawString(10, posY, COLOR_GREEN, "Controls: \n");
-        posY = Draw_DrawString(10, posY, COLOR_WHITE, "Up/Down for +-1, Right/Left for +-10.\n");
-        posY = Draw_DrawString(10, posY, COLOR_WHITE, "Hold X/A for Top/Bottom screen only. \n");
+        posY = Draw_DrawString(20, posY, COLOR_GREEN, "Controls: \n");
+        posY = Draw_DrawString(20, posY, COLOR_WHITE, "Up/Down for +-1, Right/Left for +-10.\n");
+        posY = Draw_DrawString(20, posY, COLOR_WHITE, "Hold X/A for Top/Bottom screen only. \n");
         if(hasTopScreen)
         {
-            posY = Draw_DrawString(10, posY, COLOR_WHITE, "Press Y to toggle top/bottom backlight.\n\n");
+            posY = Draw_DrawString(20, posY, COLOR_WHITE, "Press Y to toggle top/bottom backlight.\n\n");
         }
-        posY = Draw_DrawString(10, posY, COLOR_TITLE, "Press START to begin, B to exit.\n\n");
+        posY = Draw_DrawString(20, posY, COLOR_TITLE, "Press START to begin, B to exit.\n\n");
 
-        posY = Draw_DrawString(10, posY, COLOR_RED, "WARNING: \n");
-        posY = Draw_DrawString(10, posY, COLOR_WHITE, "  * all changes revert after sleep mode.");
+        posY = Draw_DrawString(20, posY, COLOR_RED, "WARNING: \n");
+        posY = Draw_DrawString(20, posY, COLOR_WHITE, "  * all changes revert after sleep mode.");
         if(isn3dsOnly)
         {
-            posY = Draw_DrawString(10, posY, COLOR_WHITE, "\n  * auto brightness must be disabled\n    to work properly.");
+            posY = Draw_DrawString(20, posY, COLOR_WHITE, "\n  * auto brightness must be disabled\n    to work properly.");
         }
         Draw_FlushFramebuffer();
         Draw_Unlock();

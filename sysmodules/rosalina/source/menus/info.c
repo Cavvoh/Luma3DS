@@ -40,29 +40,29 @@ void InfoMenu_ShowSystemInfo(void)
         Draw_Lock();
         Draw_DrawMenuFrame("System info");
 
-        u32 posY = 30;
+        u32 posY = 40;
 
         if (areScreenTypesInitialized)
         {
-            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Top screen type:    %s\n", topScreenType);
-            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Bottom screen type: %s\n\n", bottomScreenType);
+            posY = Draw_DrawFormattedString(20, posY, COLOR_WHITE, "Top screen type:    %s\n", topScreenType);
+            posY = Draw_DrawFormattedString(20, posY, COLOR_WHITE, "Bottom screen type: %s\n\n", bottomScreenType);
         }
 
-        posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Kernel version:     %lu.%lu-%lu\n\n", GET_VERSION_MAJOR(kver), GET_VERSION_MINOR(kver), GET_VERSION_REVISION(kver));
+        posY = Draw_DrawFormattedString(20, posY, COLOR_WHITE, "Kernel version:     %lu.%lu-%lu\n\n", GET_VERSION_MAJOR(kver), GET_VERSION_MINOR(kver), GET_VERSION_REVISION(kver));
         if (mcuFwVersion != 0 && mcuInfoTableRead)
         {
-            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "MCU FW version:     %lu.%lu\n", GET_VERSION_MAJOR(mcuFwVersion), GET_VERSION_MINOR(mcuFwVersion));
-            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "PMIC vendor:        %hhu\n", mcuInfoTable[1]);
-            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Battery vendor:     %hhu\n", mcuInfoTable[2]);
-            posY = Draw_DrawString(10, posY, COLOR_WHITE, "\n");
+            posY = Draw_DrawFormattedString(20, posY, COLOR_WHITE, "MCU FW version:     %lu.%lu\n", GET_VERSION_MAJOR(mcuFwVersion), GET_VERSION_MINOR(mcuFwVersion));
+            posY = Draw_DrawFormattedString(20, posY, COLOR_WHITE, "PMIC vendor:        %hhu\n", mcuInfoTable[1]);
+            posY = Draw_DrawFormattedString(20, posY, COLOR_WHITE, "Battery vendor:     %hhu\n", mcuInfoTable[2]);
+            posY = Draw_DrawString(20, posY, COLOR_WHITE, "\n");
         }
 
         u64 titleId = 0;
         Get_TitleID(&titleId);
         if (titleId != 0)
-            posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Title ID:           %016llX\n", titleId);
+            posY = Draw_DrawFormattedString(20, posY, COLOR_WHITE, "Title ID:           %016llX\n", titleId);
         else
-            posY = Draw_DrawString(10, posY, COLOR_WHITE, "Title ID:           Not Found\n");
+            posY = Draw_DrawString(20, posY, COLOR_WHITE, "Title ID:           Not Found\n");
 
         Draw_FlushFramebuffer();
         Draw_Unlock();
@@ -92,15 +92,15 @@ void InfoMenu_ShowDebugInfo(void)
         Draw_Lock();
         Draw_DrawMenuFrame("Debug info");
 
-        u32 posY = 30;
+        u32 posY = 40;
 
-        posY = Draw_DrawString(10, posY, COLOR_WHITE, memoryMap);
-        posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Kernel ext PA: %08lx - %08lx\n\n", kextPa, kextPa + kextSize);
+        posY = Draw_DrawString(20, posY, COLOR_WHITE, memoryMap);
+        posY = Draw_DrawFormattedString(20, posY, COLOR_WHITE, "Kernel ext PA: %08lx - %08lx\n\n", kextPa, kextPa + kextSize);
         if (R_SUCCEEDED(FSUSER_GetSdmcSpeedInfo(&speedInfo)))
         {
             u32 clkDiv = 1 << (1 + (speedInfo.sdClkCtrl & 0xFF));
             posY = Draw_DrawFormattedString(
-                10, posY, COLOR_WHITE, "SDMC speed: HS=%d %lukHz\n",
+                20, posY, COLOR_WHITE, "SDMC speed: HS=%d %lukHz\n",
                 (int)speedInfo.highSpeedModeEnabled, SYSCLOCK_SDMMC / (1000 * clkDiv)
             );
         }
@@ -108,13 +108,13 @@ void InfoMenu_ShowDebugInfo(void)
         {
             u32 clkDiv = 1 << (1 + (speedInfo.sdClkCtrl & 0xFF));
             posY = Draw_DrawFormattedString(
-                10, posY, COLOR_WHITE, "NAND speed: HS=%d %lukHz\n",
+                20, posY, COLOR_WHITE, "NAND speed: HS=%d %lukHz\n",
                 (int)speedInfo.highSpeedModeEnabled, SYSCLOCK_SDMMC / (1000 * clkDiv)
             );
         }
         {
             posY = Draw_DrawFormattedString(
-                10, posY, COLOR_WHITE, "APPMEMTYPE: %lu\n",
+                20, posY, COLOR_WHITE, "APPMEMTYPE: %lu\n",
                 OS_KernelConfig->app_memtype
             );
         }
