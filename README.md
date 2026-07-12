@@ -9,7 +9,7 @@
 * Changed the configuration file name to `evoconfig.ini`
 * Changed the colors of the Rosalina and Configuration menu
 * Tools menu
-* Reset the StreetPass 8h cooldown to streetpass other 3DS again
+* Reset the StreetPass 8h cooldown to streetpass other 3DS again - *Original homebrew app by [tastymeatball](https://gbatemp.net/threads/release-clear-mac-filter.515882/)*
 * Set the number of Play Coins - *Original by [Gruetzig](https://github.com/Gruetzig/Luma3DS/commit/1e329b55dade61ba74a0bb1cc6e59d2504d0bde1)*
 * Plugin selector - *Original by [Tekito-256](https://github.com/Tekito-256/Luma3DS)*  
   > **Note:** After setting a default plugin, hold Select while launching a game to open the plugin selector*
@@ -21,6 +21,8 @@
 * Logo.bin loading feature - *Original by [Pixel-Pop](https://github.com/Pixel-Pop/Luma3DS/commit/d225d9fa507dcccce3a6c86d0a38f7998f39b7a2)*
 * Detailed screen brightness adjustment - *Original by [DullPointer](https://github.com/DullPointer/Luma3DS/commit/83e8d471a377bc6960fae00d6694f5fe86dcca42)*
 * Volume display in Rosalina menu - *Original by [DullPointer](https://github.com/DullPointer/Luma3DS_archive/commit/dc636d82492d1e87eb51785fa7f2a98617e7ece9)*
+* Improved system modules speed - *Original by [Core-2-Extreme](https://github.com/Core-2-Extreme/Luma3DS_custom/commit/523b7f75d32e5795c67a16ecd45b28fe188bb08d)*
+* Fixed Rosalina menu freeze - *Original by [RedShyGuy](https://github.com/RedShyGuy/Luma3DS/commit/3477a3b6beee9b232477e9d9fc893a6630409ea7)*
 * N3DS clock + L2 status display in Rosalina menu - *Original by [DullPointer](https://github.com/DullPointer/Luma3DS/commit/2dbfa8b5c9b719b7f3056691f54332f42da6de8d)*
 
 * Title ID display in System info

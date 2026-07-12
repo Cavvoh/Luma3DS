@@ -173,11 +173,11 @@ void RosalinaMenu_PowerOffOrReboot(void)
     {
         Draw_Lock();
         Draw_DrawMenuFrame("Power Off / Reboot");
-        Draw_DrawString(10, 30, COLOR_WHITE, "Press A to power off.");
-        Draw_DrawString(10, 40, COLOR_WHITE, "Press Y to reboot.");
-        Draw_DrawString(10, 50, COLOR_WHITE, "Press X to force reboot.");
-        Draw_DrawString(10, 60, COLOR_WHITE, "Press B to go back.");
-        Draw_DrawString(10, 80, COLOR_WHITE, "Note: Force reboot may corrupt your SD card.");
+        Draw_DrawString(20, 40, COLOR_WHITE, "Press A to power off.");
+        Draw_DrawString(20, 50, COLOR_WHITE, "Press Y to reboot.");
+        Draw_DrawString(20, 60, COLOR_WHITE, "Press X to force reboot.");
+        Draw_DrawString(20, 70, COLOR_WHITE, "Press B to go back.");
+        Draw_DrawString(20, 90, COLOR_WHITE, "Note: Force reboot may corrupt your SD card.");
         Draw_FlushFramebuffer();
         Draw_Unlock();
 
