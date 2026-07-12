@@ -230,7 +230,6 @@ static size_t LumaConfig_SaveLumaIniConfigToStr(char *out, const CfgData *cfg)
 
         forceAudioOutputStr,
         cfg->volumeSliderOverride,
-
         (int)((cfg->homeButtonSimFlags >> 0) & 1),
         (int)((cfg->homeButtonSimFlags >> 1) & 1),
         homeButtonComboStr,

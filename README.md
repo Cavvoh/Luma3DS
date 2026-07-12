@@ -36,7 +36,7 @@
 * Restored "Enable dev UNITINFO" and "Enable Rosalina on SAFE_FIRM" options in configuration menu
 * Re-added splash duration setting option in configuration menu (custom values also supported)
 * Added no errdisp + instant reboot option - Press A+B+X+Y+Start to instantly reboot  
-  > **Note:** Configurable via `nexusconfig.ini` only. Using instant reboot may corrupt your SD card
+  > **Note:** Configurable via `evoconfig.ini` only. Using instant reboot may corrupt your SD card
 * Day/Night mode allowing to change the brightness, toggle LEDs, etc. At a desired time - *Original by [cooolgamer](https://github.com/cooolgamorg/Starlight3DS/commit/d0eb60bc21f464e7269dc7b93416e89423232de9) based on [DullPointer](https://github.com/DullPointer/Luma3DS_archive/commit/54cdedce2a55b8deae730d0af077ee2907f0444b)*
 * Random little messages in the arm11/9 exception handler :)
 * Screenshots include title ID in filename
