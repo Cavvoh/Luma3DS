@@ -3,6 +3,7 @@
 
 ## Description
 **Evolution3DS** is an unofficial fork of [Luma3DS](https://github.com/LumaTeam/Luma3DS). This project combines features of several Luma3DS forks that I like.
+### This fork is intended for personal use. I cannot guarantee this is safe for your hardware.
 
 ## Added/Changed Features
 * Changed the configuration file name to `evoconfig.ini`
