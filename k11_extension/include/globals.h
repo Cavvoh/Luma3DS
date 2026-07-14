@@ -164,6 +164,12 @@ typedef struct CfwInfo
     u64 autobootTwlTitleId;
     u8 autobootCtrAppmemtype;
 
+    u32 extraConfigFlags;
+    u32 homeButtonSimFlags;
+    u32 homeButtonCombo;
+    u8 screenToggleTarget;
+    u32 screenToggleCombo;
+
     u16 launchedPath[80+1];
 } CfwInfo;
 

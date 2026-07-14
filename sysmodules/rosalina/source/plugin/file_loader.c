@@ -56,8 +56,8 @@ bool ConfirmOperation(const char *message)
     {
         Draw_Lock();
         Draw_DrawMenuFrame("Confirmation");
-        Draw_DrawString(10, 40, COLOR_WHITE, message);
-        Draw_DrawString(10, 70, COLOR_WHITE, "Press [A] to confirm, press [B] to cancel.");
+        Draw_DrawString(20, 40, COLOR_WHITE, message);
+        Draw_DrawString(20, 75, COLOR_WHITE, "Press [A] to confirm, press [B] to cancel.");
         Draw_FlushFramebuffer();
         Draw_Unlock();
 
@@ -240,7 +240,8 @@ u8 FileOptions(PluginEntry *entries, u8 *count, u8 index, u8 *defaultPlgIndex)
 
             if (isSelected) {
                 Draw_DrawString(15, 40 + (i + 2) * SPACING_Y, COLOR_LIGHT_BLUE, "->");
-                Draw_DrawString(35, 40 + (i + 2) * SPACING_Y, COLOR_CYAN, options[i].name);
+                u32 selectedColor = options[i].enabled ? COLOR_CYAN : COLOR_LIGHT_BLUE;
+                Draw_DrawString(35, 40 + (i + 2) * SPACING_Y, selectedColor, options[i].name);
             } else {
                 Draw_DrawString(15, 40 + (i + 2) * SPACING_Y, COLOR_GRAY, " ~");
                 Draw_DrawString(35, 40 + (i + 2) * SPACING_Y, color, options[i].name);

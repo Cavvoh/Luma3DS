@@ -116,7 +116,7 @@ static size_t LumaConfig_SaveLumaIniConfigToStr(char *out, const CfgData *cfg)
 
     s64 outInfo;
     svcGetSystemInfo(&outInfo, 0x10000, 0);
-    u32 version = (u32)outInfo;
+    // u32 version = (u32)outInfo;
 
     svcGetSystemInfo(&outInfo, 0x10000, 1);
     u32 commitHash = (u32)outInfo;
@@ -156,10 +156,10 @@ static size_t LumaConfig_SaveLumaIniConfigToStr(char *out, const CfgData *cfg)
         case 2: forceAudioOutputStr = "speakers"; break;
     }
 
-    if (GET_VERSION_REVISION(version) != 0) {
-        sprintf(lumaVerStr, "Evolution3DS v%d.%d.%d", (int)GET_VERSION_MAJOR(version), (int)GET_VERSION_MINOR(version), (int)GET_VERSION_REVISION(version));
+    if (EVOLUTION_VERSION_BUILD != 0) {
+        sprintf(lumaVerStr, "Evolution3DS v%d.%d.%d", (int)EVOLUTION_VERSION_MAJOR, (int)EVOLUTION_VERSION_MINOR, (int)EVOLUTION_VERSION_BUILD);
     } else {
-        sprintf(lumaVerStr, "Evolution3DS v%d.%d",  (int)GET_VERSION_MAJOR(version), (int)GET_VERSION_MINOR(version));
+        sprintf(lumaVerStr, "Evolution3DS v%d.%d", (int)EVOLUTION_VERSION_MAJOR, (int)EVOLUTION_VERSION_MINOR);
     }
 
     if (isRelease) {
